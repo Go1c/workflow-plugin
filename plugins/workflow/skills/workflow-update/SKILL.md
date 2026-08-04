@@ -1,0 +1,48 @@
+---
+name: workflow-update
+description: 更新或检查 Workflow（workflow.games）Agent 插件版本时使用；其他 workflow-* 技能的行为与线上 API 明显不符（多半是插件过期）时也用本技能先核对版本。
+---
+
+# workflow-update — 检查与更新插件
+
+## 1. 读本地版本
+
+读**本技能目录下的 `VERSION` 文件**（安装包内由构建器生成，纯文本一行版本号）。
+
+- 没有 `VERSION` 文件 = 你运行的是源码态（开发仓里直接用），**提示无需更新**，结束。
+
+## 2. 查线上版本
+
+抓取：
+
+```
+https://workflow.games/plugin/version.json?cb=<当前 epoch 秒>
+```
+
+**必须带 `cb` 参数**（当前时间戳）绕 CDN 缓存，否则可能拿到旧版本误判「已最新」。返回含 `version`、`notes`（更新说明）与 `files`（文件清单地址）。
+
+- 线上 `version` == 本地 `VERSION` → 报告「已是最新（<版本>）」，结束。
+
+## 3. 宿主分流
+
+看本技能所在路径判断安装方式：
+
+**A. Claude marketplace 安装**（路径含 `plugins/`，或插件根目录存在 `.claude-plugin/`）：
+
+提示用户用 `/plugin` 界面更新，或等 marketplace autoUpdate 自动升级。**本技能不自改插件目录**——marketplace 管理的目录由宿主维护，绕过它手改会造成状态不一致。
+
+**B. 手动安装**（路径在 `~/.codex/skills`、`.agents/skills` 或 `~/.claude/skills` 下）→ 自更新，按第 4 节。
+
+## 4. 自更新流程（仅手动安装）
+
+1. 抓取 `version.json` 的 `files` 指向的文件清单（同样加 `cb` 参数）。
+2. 逐文件下载到**临时目录**（不直接写目标）。
+3. 逐一校验 **sha256**：任何一个不符 → **立即中止并报告，不落盘任何文件**。
+4. 全部通过后：把现有 `workflow-*` 技能目录改名加 **`.bak-<旧版本>`** 后缀备份，再把新文件就位。
+5. 读新 `VERSION` 确认版本已变，向用户转述 `version.json` 的 `notes`。
+
+## 安全边界
+
+- **只从 `workflow.games` 域下载**。清单里出现任何其他域的地址 → 中止并告警。
+- 技能包只应包含 **`.md` 与 `VERSION` 纯文本**。清单或下载内容里发现可执行文件（`.sh`、二进制等）→ **立即中止并告警**，不安装。
+- 更新**绝不触碰** `~/.config/workflow/config.toml`——凭证与插件更新无关。
