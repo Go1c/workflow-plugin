@@ -11,15 +11,29 @@ description: 首次接入 Workflow（workflow.games）、还没有账号或 API 
 
 ## Step 0 — 静默探测（每次都先做，不问用户）
 
-1. 若设置了环境变量 `WORKFLOW_API_BASE` 与 `WORKFLOW_TOKEN`（CI / 自动化场景），优先用它们：`GET $WORKFLOW_API_BASE/me`（`WORKFLOW_API_BASE` 应以 `/api/v1` 结尾）。
-2. 否则读 `~/.config/workflow/config.toml`：取 `current_profile` 指向的 profile 的 `base_url` 与 `token`，探测 `GET <base_url>/api/v1/me`。
-3. 探测通过 → 直接按完成判据报告，结束本技能。探测失败或文件不存在 → 按下面分支走。
+按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token：
+
+1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
+2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
+3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
+
+取到凭证 → 探测 `GET <base_url>/api/v1/me`。探测通过 → 直接按完成判据报告，结束本技能。探测失败或全局 config 不存在 → 按下面分支走。
 
 curl 携带 token 一律走环境变量，不把明文拼进命令行：
 
 ```bash
 curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/me"
 ```
+
+## 项目绑定与多项目（`.workflow` 标记）
+
+一台机器接多个项目时，插件全局只装一份、`config.toml` 每项目一节 profile，项目目录用 `.workflow` 标记文件声明「这个目录绑哪个 profile」：
+
+- **位置**：项目仓库根（或当前工作目录）。查找规则：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止。
+- **内容**：一行 TOML——`profile = "<profile 名>"`（双引号）；允许**整行** `#` 注释（不支持行内注释，会导致解析落空）；仅此一键，**不含 token**，可提交进版本库与全队共享（每人的 token 仍在各自全局 config 里）。
+- **写入时机**：setup 完成项目绑定时问用户「要不要把绑定写进当前项目（`.workflow` 文件）」，默认写。
+
+`.workflow` 是独立文件，**绝不合并进 `config.toml`**——`config.toml` 的格式合同一个键都不能加（见分支 C 的写盘规则）。
 
 ## 分支 A — 用户还没有账号
 
@@ -73,6 +87,8 @@ EOF
 - 文件已存在时**合并**：保留已有 profile，只新增/更新目标 profile，不整文件覆盖。
 - profile 名默认用子域前缀。
 
+**写完 config.toml，接着写 `.workflow` 绑定**：问用户「要不要把绑定写进当前项目（`.workflow` 文件）」，默认写——在项目仓库根写入一行 `profile = "<profile 名>"`（规范见「项目绑定与多项目」），然后进入验证。
+
 ## 验证与分诊
 
 写盘后立刻探测 `GET <base_url>/api/v1/me`，按结果分诊：
@@ -80,9 +96,11 @@ EOF
 - **401** → token 失效或粘贴不完整：检查是否有 `wfp_` 前缀、是否粘进了换行/空格。让用户重发或重建 token 后重配。
 - **403 但 `/me` 是通的** → 权限问题，先问两件事：① token 是不是 `read_only`？② 用户角色是否最近被管理员调小？给一段找管理员的话术；**不建议**借他人 token 绕权限。
 - **`/me` 返回的项目 ≠ 目标项目** → token 绑错项目：token 只认自己的项目，去目标项目的设置页另建一枚 token，配成新 profile。
+- **`/me` 返回的项目 ≠ 当前目录 `.workflow` 绑定指向的项目** → 凭证与目录绑定打架：先问用户要在哪个项目干活；改 `.workflow` 指向正确 profile，或为该项目走分支 B/C 补一枚 token，绝不带着错绑定继续写数据。
+- **config 里多个 profile、当前目录又没有 `.workflow`** → 歧义，不得静默挑一个：问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续。
 - **域名解析失败** → 回显 `base_url` 让用户核对子域前缀拼写。
 
-多项目 = 多 profile：每个项目一节 `[profiles.<名>]`，切换项目只改 `current_profile`。
+多项目 = 每项目一枚 token + 一节 `[profiles.<名>]` + 一个 `.workflow` 标记（见「项目绑定与多项目」）；切换项目靠所在目录的 `.workflow` 指向，不靠改全局 `current_profile`。
 
 ## 纪律
 

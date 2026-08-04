@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "让 AI Agent 直连 Workflow（workflow.games）：接入配置、建需求、记 bug、查任务、流转状态、查文档",
   "author": {
     "name": "Workflow",

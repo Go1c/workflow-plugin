@@ -5,9 +5,17 @@ description: 在 Workflow（workflow.games）项目里建需求、记 bug/缺陷
 
 # workflow-ops — 在 Workflow 里干活
 
-## 前置连接检查
+## 前置：凭证与连接检查
 
-先 `GET $WORKFLOW_API_BASE/me` 确认连接可用。不通（401/403/网络失败/没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
+按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token（可直接抄的 shell 片段见 `references/call-templates.md`）：
+
+1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
+2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
+3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
+
+取到后先 `GET $WORKFLOW_API_BASE/me` 确认连接可用。不通（401/403/网络失败/没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
+
+**写操作防呆**：任何写操作（建单/改单/流转/评论/附件）前，`/me` 返回的项目必须与 `.workflow` 指向 profile 的 `base_url` 子域一致；不一致 → 停下转 workflow-setup 重新绑定，**绝不把数据写进错误项目**。
 
 ## 真值原则（置顶）
 

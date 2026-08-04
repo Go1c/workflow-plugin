@@ -2,16 +2,46 @@
 
 > 模板只演示**调用姿势**（鉴权、分页、multipart、读回）。路径、必填字段、参数名以现查合同为准（SKILL.md 真值原则）——个别端点可能带 `/projects/{projectId}` 前缀或有新增必填字段，动手前用 L3 `https://workflow.games/openapi/gameflow.v1.yaml` 核对 operationId。
 
-## 环境变量（token 不进命令行明文）
+## 取凭证（token 不进命令行明文）
 
-从凭证文件读当前 profile，赋给环境变量后再调 curl：
+按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token：
+
+1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
+2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
+3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
+
+可直接抄的解析片段（env 已设则原样沿用）：
 
 ```bash
-CONFIG="$HOME/.config/workflow/config.toml"
-PROFILE=$(sed -n 's/^current_profile = "\(.*\)"$/\1/p' "$CONFIG")
-BASE=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^base_url = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
-export WORKFLOW_API_BASE="$BASE/api/v1"
-export WORKFLOW_TOKEN=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^token = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
+if [ -z "$WORKFLOW_TOKEN" ] || [ -z "$WORKFLOW_API_BASE" ]; then
+  CONFIG="$HOME/.config/workflow/config.toml"
+  # 第 2 级：从当前目录向上找最近的 .workflow（到含 .git 的目录或文件系统根为止）
+  DIR="$PWD"; PROFILE=""
+  while :; do
+    [ -f "$DIR/.workflow" ] && PROFILE=$(sed -n 's/^profile = "\(.*\)"$/\1/p' "$DIR/.workflow") && break
+    { [ -e "$DIR/.git" ] || [ "$DIR" = "/" ]; } && break
+    DIR=$(dirname "$DIR")
+  done
+  # 第 3 级：兜底 current_profile——仅单 profile 可静默用；多 profile 且无 .workflow 必须先问用户
+  if [ -z "$PROFILE" ] && [ -f "$CONFIG" ]; then
+    PROFILE_COUNT=$(grep -c '^\[profiles\.' "$CONFIG" 2>/dev/null || echo 0)
+    if [ "$PROFILE_COUNT" -gt 1 ]; then
+      echo "config 里多个 profile 且当前目录没有 .workflow：停下问用户绑哪个项目，写 .workflow 再继续" >&2
+    else
+      PROFILE=$(sed -n 's/^current_profile = "\(.*\)"$/\1/p' "$CONFIG")
+    fi
+  fi
+  if [ -n "$PROFILE" ] && [ -f "$CONFIG" ]; then
+    BASE=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^base_url = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
+    if [ -n "$BASE" ]; then
+      export WORKFLOW_API_BASE="$BASE/api/v1"
+      export WORKFLOW_TOKEN=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^token = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
+    else
+      # .workflow 指向的 profile 在 config 里不存在：不导出半截凭证，转 workflow-setup 为该项目补 token
+      echo "profile「$PROFILE」在 config.toml 里不存在：转 workflow-setup 为这个项目建 token" >&2
+    fi
+  fi
+fi
 ```
 
 之后任何输出里 token 只以 `wfp_` + 前 8 位指代，不回显完整值。

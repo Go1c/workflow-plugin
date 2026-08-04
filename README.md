@@ -47,6 +47,10 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 5. 然后直接开始 workflow-setup 技能的接入流程：先检测本机 ~/.config/workflow/config.toml 是否已有可用配置。
 ```
 
+## 多项目
+
+一台机器接多个项目：插件全局只装一份，不必按项目重复安装。每个项目在该项目设置页各建一枚 token，在 `~/.config/workflow/config.toml` 里各占一节 `[profiles.<名>]`；再在每个项目的仓库根放一个 `.workflow` 标记文件（一行 `profile = "<profile 名>"`），声明这个目录用哪个 profile。`.workflow` 不含 token，可提交进版本库与全队共享。Agent 取凭证按「环境变量 → `.workflow` 标记 → 全局 `current_profile` 兜底」三级解析——在哪个项目目录里干活就连哪个项目。首次在某个项目目录接入时，`workflow-setup` 会引导建 token 并写好 `.workflow`。
+
 ## 更新
 
 - **Claude Code（marketplace 安装）**：marketplace 支持 autoUpdate 自动升级；也可以在 `/plugin` 界面手动更新。
