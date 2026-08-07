@@ -64,10 +64,21 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
   assert.match(setup, /project\.subdomainPrefix/);
   assert.doesNotMatch(setup, /`\/me` 返回的项目/);
 
-  const callTemplates = read("plugins/workflow/skills/workflow-ops/references/call-templates.md");
-  assert.match(callTemplates, /\/me` 只验证用户身份/);
-  assert.match(callTemplates, /\/projects\/current/);
-  assert.doesNotMatch(callTemplates, /grep -c[^\n]+\|\| echo 0/);
+  const connection = read("plugins/workflow/skills/workflow-ops/references/connection.md");
+  assert.match(connection, /\/me` \*\*只验证用户身份\*\*/);
+  assert.match(connection, /\/projects\/current/);
+  assert.doesNotMatch(connection, /grep -c[^\n]+\|\| echo 0/);
+  // .workflow 解析落空必须停止，不得回落全局 profile（否则数据写进错项目）
+  assert.match(connection, /解析不出 profile[\s\S]{0,80}停止/);
+
+  // 凭证解析阶梯只能有一份：重复的那几份正是漂移源头。
+  const ladderOwners = listFiles(join(pluginRoot, "skills"))
+    .filter((file) => extname(file) === ".md")
+    .filter((file) => /export WORKFLOW_API_BASE=/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(repoRoot, file));
+  assert.deepEqual(ladderOwners, [
+    "plugins/workflow/skills/workflow-ops/references/connection.md",
+  ], `凭证解析片段应只存在于 connection.md，实际出现在：${ladderOwners.join(", ")}`);
 
   const manifest = JSON.parse(read("plugins/workflow/.claude-plugin/plugin.json"));
   assert.equal(manifest.version, "0.3.0");

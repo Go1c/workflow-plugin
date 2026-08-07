@@ -13,25 +13,13 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 ## 前置：凭证与连接检查
 
-按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token（可直接抄的 shell 片段见 `references/call-templates.md`）：
+**完整读取 [connection.md](references/connection.md)** —— 凭证三级解析、`/me` 与 `/projects/current` 的分工、写操作三方一致性防呆、真值分层与失败处置表都在那里，是 setup / ops / planning 共用的单一真相源，不要凭记忆重写。
 
-1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
-2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
-3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
+要点：先 `GET $WORKFLOW_API_BASE/me` 验证身份，再 `GET $WORKFLOW_API_BASE/projects/current` 验证 Host 解析出的项目与 membership 角色/权限。任一不通（401/403/204/404、网络失败或没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
 
-取到后先 `GET $WORKFLOW_API_BASE/me` 验证身份，再 `GET $WORKFLOW_API_BASE/projects/current` 验证 Host 解析出的项目与 membership 角色/权限。任一不通（401/403/204/404、网络失败或没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
+写操作前必须过 connection.md 的防呆检查；`subdomainPrefix`、profile 子域与实际 Host 三方对不上，或 `publicDemo=true` → 停，**绝不把数据写进错误项目**。
 
-**写操作防呆**：任何写操作（建单/改单/流转/评论/附件）前，`/projects/current` 返回的 `project.subdomainPrefix` 必须与实际 API Host 以及 `.workflow` 所选 profile 的 `base_url` 子域一致，`membership.permissions` 也必须包含本次动作所需的角色权限；不一致或 `publicDemo=true` → 停下转 workflow-setup 重新绑定/分诊，**绝不把数据写进错误项目**。`membership.permissions` 不包含当前 PAT 的 scope，不能单独证明 token 可写；scope 未知时如实说明，绝不靠探测性写入验证，实际写端点的 403 仍按权限问题停止。
-
-## 真值原则（置顶）
-
-**本技能不内嵌端点与字段快照**——平台迭代快，快照必过期。每次调用前按三级现查：
-
-1. **L1** `https://workflow.games/llms.txt` —— 文档索引，先看有哪些指南。
-2. **L2** `https://workflow.games/md/guides/<slug>.md` —— 人读指南，字段口径与易错点。
-3. **L3** `https://workflow.games/openapi/gameflow.v1.yaml` —— 合同真值（约 9000 行，**grep 定位 operationId/path 后分段读**，不要整读）。
-
-L2 足够就不必下到 L3；路径、必填字段、枚举拿不准时以 L3 为准。
+**项目自定义的东西一律现查**：工作流状态、验收类型/状态、成员、缺陷自定义字段每个项目都不一样，查不到就留空并说明，不猜一个值填进去。
 
 ## 对象模型（三句话）
 
@@ -51,15 +39,9 @@ L2 足够就不必下到 L3；路径、必填字段、枚举拿不准时以 L3 �
 
 **每个写操作后 `GET` 读回验证**，向用户报：`displayKey` + UUID + 标题 + 可点链接（`https://<子域>.workflow.games/...`，优先用读回响应或搜索结果里的 deepLink）。
 
-## 失败处置表
+## 失败处置
 
-| 状况 | 处置 |
-| --- | --- |
-| 422 | 按 ProblemDetails 的 errors 补齐/修正字段**重试一次**；第二次仍失败就停下，把 `traceId` 贴给用户 |
-| 401 / 403 | 转 workflow-setup 分诊，不在本技能里试来试去 |
-| 423 | 项目已冻结，**不重试**，转告用户找管理员解冻 |
-| 429 | 限流是 per-token 的（约 60 突发 / 120 每分钟）；按 `Retry-After` 退避重试，**至多 3 次**，并降低后续调用频率 |
-| 网络错误 / 5xx | **必须先查询确认是否已落库**（search 或列表），确认未落库才可重发——防重复建单 |
+按 [connection.md](references/connection.md) 的失败处置表执行（422 / 401 / 403 / 409 / 423 / 429 / 5xx）。最容易出事的一条：**网络错误或 5xx 之后必须先查询确认是否已落库，确认未落库才可重发**——这是重复建单的头号来源。
 
 ## 收尾
 

@@ -13,13 +13,7 @@ description: 首次接入 Workflow（workflow.games）、还没有账号或 API 
 
 ## Step 0 — 静默探测（每次都先做，不问用户）
 
-按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token：
-
-1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
-2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
-3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
-
-规范化 API 根地址：环境变量 `WORKFLOW_API_BASE` 已以 `/api/v1` 结尾；config 里的 `base_url` 是站点根，读取后只追加一次 `/api/v1`。出现重复后缀或非 HTTPS 项目 Host 就停止分诊，不猜测修剪。
+按 [workflow-ops/references/connection.md](../workflow-ops/references/connection.md) 的**凭证解析顺序（三级）**取 `base_url` 与 token——三级规则、API 根地址规范化和可抄的 shell 片段都在那份共享文件里，本技能不另写一份。
 
 取到凭证 → 依次探测 `GET $WORKFLOW_API_BASE/me` 与 `GET $WORKFLOW_API_BASE/projects/current`。两者通过且项目与 profile 一致 → 直接按完成判据报告，结束本技能。探测失败或全局 config 不存在 → 按下面分支走。
 
