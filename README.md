@@ -9,6 +9,7 @@
 | 技能 | 干什么 |
 | --- | --- |
 | `workflow-setup` | 首次接入：注册引导、配置 API token、验证连接、401/403 分诊 |
+| `workflow-planning` | 规划：把一句话或文档讨论成简单需求或跨工种需求室，每张专业需求都是完整 Agent 提示词 |
 | `workflow-ops` | 干活：建需求、记 bug（含查重）、查询、指派、流转、评论、附件 |
 | `workflow-docs` | 答疑：抓线上文档回答 API / 功能问题，不凭记忆 |
 | `workflow-update` | 检查并更新插件自身版本 |
@@ -24,7 +25,7 @@
 /plugin install workflow@workflow-plugin
 ```
 
-装好后可用 `/workflow:setup`（接入）、`/workflow:bug <描述>`（记 bug）、`/workflow:update`（更新插件）。
+装好后可用 `/workflow:setup`（接入）、`/workflow:plan <描述>`（规划需求）、`/workflow:bug <描述>`（记 bug）、`/workflow:update`（更新插件）。
 
 ## Codex 安装
 
@@ -50,6 +51,12 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 ## 多项目
 
 一台机器接多个项目：插件全局只装一份，不必按项目重复安装。每个项目在该项目设置页各建一枚 token，在 `~/.config/workflow/config.toml` 里各占一节 `[profiles.<名>]`；再在每个项目的仓库根放一个 `.workflow` 标记文件（一行 `profile = "<profile 名>"`），声明这个目录用哪个 profile。`.workflow` 不含 token，可提交进版本库与全队共享。Agent 取凭证按「环境变量 → `.workflow` 标记 → 全局 `current_profile` 兜底」三级解析——在哪个项目目录里干活就连哪个项目。首次在某个项目目录接入时，`workflow-setup` 会引导建 token 并写好 `.workflow`。
+
+## 从想法到开发需求
+
+对 Agent 说「规划这个需求」或使用 `/workflow:plan`。Agent 会先读取输入与项目规范，再一次只问一个会改变方案的问题。单工种产出一张 Requirement；跨工种产出一个 Requirement Room，并按需求定义、UX/UI 与可选美术、QA 测试用例、程序公共底座、程序功能、整体 Code Review、QA 收尾的顺序生成专业需求。
+
+整套蓝图确认前不会写入 Workflow。确认落单后也只创建 PM 对象，不会自动开始编码；专业需求正式开工时才按目标仓库规则拆 WorkItem。
 
 ## 更新
 

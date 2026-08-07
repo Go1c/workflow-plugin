@@ -8,7 +8,7 @@
     {
       "name": "workflow",
       "source": "./plugins/workflow",
-      "description": "让 AI Agent 直连 Workflow（workflow.games）：接入配置、建需求、记 bug、查任务、流转状态、查文档"
+      "description": "让 AI Agent 直连 Workflow（workflow.games）：规划需求室、建需求、记 bug、查任务、流转状态、查文档"
     }
   ]
 }

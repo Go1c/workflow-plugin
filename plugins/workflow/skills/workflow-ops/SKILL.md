@@ -5,6 +5,12 @@ description: 在 Workflow（workflow.games）项目里建需求、记 bug/缺陷
 
 # workflow-ops — 在 Workflow 里干活
 
+## 与需求规划的边界
+
+用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆跨工种需求」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、复杂度判定、模板化蓝图和整体确认后的批量落单。
+
+本技能只处理已经明确的单次业务操作：建一张字段已定的需求/工作项、查询、指派、流转、评论或附件。不得把原始想法临场扩写成一套开发计划，也不得在建单后自动启动实现。
+
 ## 前置：凭证与连接检查
 
 按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token（可直接抄的 shell 片段见 `references/call-templates.md`）：
