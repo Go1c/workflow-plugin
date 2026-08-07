@@ -44,7 +44,8 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
   assert.match(skill, /规划、梳理或拆解/);
   assert.match(skill, /独立写入确认/);
   assert.match(skill, /不用于字段已明确的单次建单/);
-  assert.match(skill, /蓝图内容确认不等于线上写入授权/);
+  // 「内容认可 ≠ 写入授权」现由硬闸门 G2 承担，技能内联该闸门块。
+  assert.match(skill, /<!-- gates:start -->[\s\S]*不是写入授权[\s\S]*<!-- gates:end -->/);
   assert.match(skill, /用户只要求方案、PRD、拆解或提示词时.*停止/);
 
   const command = read("plugins/workflow/commands/plan.md");
@@ -64,10 +65,21 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
   assert.match(setup, /project\.subdomainPrefix/);
   assert.doesNotMatch(setup, /`\/me` 返回的项目/);
 
-  const callTemplates = read("plugins/workflow/skills/workflow-ops/references/call-templates.md");
-  assert.match(callTemplates, /\/me` 只验证用户身份/);
-  assert.match(callTemplates, /\/projects\/current/);
-  assert.doesNotMatch(callTemplates, /grep -c[^\n]+\|\| echo 0/);
+  const connection = read("plugins/workflow/skills/workflow-ops/references/connection.md");
+  assert.match(connection, /\/me` \*\*只验证用户身份\*\*/);
+  assert.match(connection, /\/projects\/current/);
+  assert.doesNotMatch(connection, /grep -c[^\n]+\|\| echo 0/);
+  // .workflow 解析落空必须停止，不得回落全局 profile（否则数据写进错项目）
+  assert.match(connection, /解析不出 profile[\s\S]{0,80}停止/);
+
+  // 凭证解析阶梯只能有一份：重复的那几份正是漂移源头。
+  const ladderOwners = listFiles(join(pluginRoot, "skills"))
+    .filter((file) => extname(file) === ".md")
+    .filter((file) => /export WORKFLOW_API_BASE=/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(repoRoot, file));
+  assert.deepEqual(ladderOwners, [
+    "plugins/workflow/skills/workflow-ops/references/connection.md",
+  ], `凭证解析片段应只存在于 connection.md，实际出现在：${ladderOwners.join(", ")}`);
 
   const manifest = JSON.parse(read("plugins/workflow/.claude-plugin/plugin.json"));
   assert.equal(manifest.version, "0.3.0");
@@ -134,33 +146,76 @@ test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆�
   assert.match(template, /不得声称未实际执行的验证通过/);
   assert.match(template, /与 Workflow 结构化验收项一一对应/);
 
-  const overlays = read("plugins/workflow/skills/workflow-planning/references/discipline-overlays.md");
+  // 覆盖层是「索引 + 每层一个文件」：断言结构与可达性，不断言正文措辞。
+  const index = read("plugins/workflow/skills/workflow-planning/references/discipline-overlays.md");
+  const indexDir = join(planningRoot, "references");
+  const linked = new Map(
+    [...index.matchAll(/\|\s*`(\[[^\]]+\])`\s*\|[^|]*\|\s*\[[^\]]+\]\((overlays\/[a-z-]+\.md)\)\s*\|/g)]
+      .map((match) => [match[1], match[2]]),
+  );
+
   for (const discipline of [
-    "预研",
-    "策划·系统/玩法",
-    "策划·关卡/内容",
-    "叙事/本地化",
-    "UX/UI",
-    "美术",
-    "技术美术",
-    "动画/VFX/音频",
-    "测试·用例",
-    "程序·协议/公共",
-    "程序·服务端",
-    "程序·客户端",
-    "程序·工具/构建",
-    "数据/运营/发布",
-    "集成",
-    "Review",
-    "测试·收尾",
+    "[原始需求]",
+    "[预研]",
+    "[策划·系统/玩法]",
+    "[策划·关卡/内容]",
+    "[叙事/本地化]",
+    "[UX/UI]",
+    "[美术]",
+    "[技术美术]",
+    "[动画/VFX/音频]",
+    "[测试·用例]",
+    "[程序·协议/公共]",
+    "[程序·服务端]",
+    "[程序·客户端]",
+    "[程序·工具/构建]",
+    "[数据/运营/发布]",
+    "[集成]",
+    "[Review]",
+    "[测试·收尾]",
   ]) {
-    assert.match(overlays, new RegExp(`^## .+${escapeRegExp(discipline)}.+$`, "m"));
+    const target = linked.get(discipline);
+    assert.ok(target, `选择表缺少覆盖层「${discipline}」或未给出文件链接`);
+    const body = readFileSync(join(indexDir, target), "utf8");
+    assert.ok(body.length > 120, `${target} 内容过短，疑似拆分时丢失正文`);
   }
+  assert.equal(linked.size, 18, "选择表行数与覆盖层数量不一致");
+
+  // 索引必须保持轻量：正文留在各自文件里，否则渐进披露就白做了。
+  assert.ok(index.length < 4000, `选择表膨胀到 ${index.length} 字节，正文应留在 overlays/ 下`);
+
+  // 跨切面关注点仍需被覆盖，但允许分布在索引或任一覆盖层里。
+  const allOverlayText = listFiles(join(indexDir, "overlays"))
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n") + index;
   for (const concern of ["目标平台", "存档", "在引擎", "性能预算", "本地化", "回滚"]) {
-    assert.match(overlays, new RegExp(concern));
+    assert.match(allOverlayText, new RegExp(concern), `覆盖层整体缺少「${concern}」`);
   }
-  assert.match(overlays, /\[原始需求\].*来源记录/);
-  assert.match(overlays, /不是等待某个 Agent“实现”的任务/);
+
+  const original = readFileSync(join(indexDir, linked.get("[原始需求]")), "utf8");
+  assert.match(original, /来源记录/);
+  assert.match(original, /不是等待某个 Agent“实现”的任务/);
+});
+
+test("规划技能保持上下文预算：强制读取的文件不得无限膨胀", () => {
+  // 每张卡实际加载 = SKILL.md + 流程 + 模板 + 覆盖层索引 + 一个覆盖层。
+  const mandatory = [
+    "plugins/workflow/skills/workflow-planning/SKILL.md",
+    "plugins/workflow/skills/workflow-planning/references/planning-process.md",
+    "plugins/workflow/skills/workflow-planning/references/requirement-template.md",
+    "plugins/workflow/skills/workflow-planning/references/discipline-overlays.md",
+  ].reduce((total, path) => total + Buffer.byteLength(read(path), "utf8"), 0);
+
+  const overlayDir = join(planningRoot, "references/overlays");
+  const largestOverlay = Math.max(
+    ...listFiles(overlayDir).map((file) => Buffer.byteLength(readFileSync(file, "utf8"), "utf8")),
+  );
+
+  const budget = 30_000;
+  assert.ok(
+    mandatory + largestOverlay < budget,
+    `单次规划需加载 ${mandatory + largestOverlay} 字节，超出预算 ${budget}——新增内容应放进按需读取的 references`,
+  );
 });
 
 test("API 落单复用共享安全规则并读回原生验收项", () => {

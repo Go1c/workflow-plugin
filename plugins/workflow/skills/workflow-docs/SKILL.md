@@ -11,9 +11,7 @@ description: 用户询问 Workflow（workflow.games）的 API 或产品功能怎
 
 ## 三级下钻
 
-1. **L1** `https://workflow.games/llms.txt` —— 文档索引。先抓它，知道有哪些指南、slug 是什么。
-2. **L2** `https://workflow.games/md/guides/<slug>.md` —— 人读指南 markdown。字段口径、权限、易错点大多在这层就能答。
-3. **L3** `https://workflow.games/openapi/gameflow.v1.yaml` —— 合同真值（约 9000 行）。**grep 定位 operationId / path / schema 名后分段读**，不要整读。「究竟哪个字段必填」「枚举到底有哪些值」以这层为准。
+按 [workflow-ops/references/connection.md](../workflow-ops/references/connection.md) 第三节的 L1 → L2 → L3 阶梯抓取：**L1** 文档索引 → **L2** 人读指南（多数问题到这层就够）→ **L3** OpenAPI 合同（9000+ 行，**grep 定位后分段读，不要整读**）。「究竟哪个字段必填」「枚举到底有哪些值」以 L3 为准。
 
 ## 回答口径
 

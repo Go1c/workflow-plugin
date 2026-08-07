@@ -5,6 +5,22 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 # workflow-ops — 在 Workflow 里干活
 
+## 硬闸门（命中即停）
+
+以下 7 条是停止条件，不是风格建议；与正文其他要求冲突时以这里为准（出处 [references/gates.md](references/gates.md)）。
+
+<!-- gates:start -->
+| # | 触发条件 | 动作 |
+| :-: | --- | --- |
+| **G1** | `project.subdomainPrefix`、实际 API Host、`.workflow` 所选 profile 的子域三者任一不一致；或 `publicDemo=true`；或 `.workflow` 存在却解析不出 profile | **停止**，转 workflow-setup 重新绑定。绝不把数据写进错误项目 |
+| **G2** | 用户尚未针对**确切的项目 + 对象清单 + 数量**给出明确肯定答复 | **不得** POST/PATCH。内容认可、说"不错"、说"继续"都不是写入授权；范围一变授权即失效 |
+| **G3** | 写操作之后没有 `GET` 读回，或读回未核对字段与子资源数量 | **不得**声称「已创建 / 已修改」。部分成功如实报部分成功 |
+| **G4** | 需要在命令、日志、报告、蓝图里出现 token | **只**走环境变量携带；任何输出里只以 `wfp_` + 前 8 位指代，绝不回显完整值 |
+| **G5** | 出现拆 WorkItem、流转状态、建分支/Worktree、跑目标仓库测试、改代码或资产的冲动 | **停止**。落单不等于开工，本插件只负责 PM 对象 |
+| **G6** | 需要填工作流状态、验收类型/状态、成员 ID、缺陷自定义字段等**项目自定义**的值 | **必须现查**。查不到或不唯一就留空并告诉用户，绝不猜一个值填进去 |
+| **G7** | 要在报告里写某项验证「通过」 | 只写**实际执行过**的命令与其真实输出；没跑的写「未执行」，不得用计划中的验证冒充结果 |
+<!-- gates:end -->
+
 ## 与需求规划的边界
 
 用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆多专业/多交付轨道」「安排预研与并行 wave」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、交付拓扑判定、模板化蓝图和独立授权后的批量落单。
@@ -13,25 +29,11 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 ## 前置：凭证与连接检查
 
-按**凭证解析顺序**（三级，setup / ops / 调用模板同一口径）取 `base_url` 与 token（可直接抄的 shell 片段见 `references/call-templates.md`）：
+**完整读取 [connection.md](references/connection.md)** —— 凭证三级解析、`/me` 与 `/projects/current` 的分工、写操作三方一致性防呆、真值分层与失败处置表都在那里，是 setup / ops / planning 共用的单一真相源，不要凭记忆重写。
 
-1. 环境变量 `WORKFLOW_API_BASE` + `WORKFLOW_TOKEN`（CI 与一次性覆盖，最高优先）；`WORKFLOW_API_BASE` 以 `/api/v1` 结尾。
-2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
-3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
+要点：先 `GET $WORKFLOW_API_BASE/me` 验证身份，再 `GET $WORKFLOW_API_BASE/projects/current` 验证 Host 解析出的项目与 membership 角色/权限。任一不通（401/403/204/404、网络失败或没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
 
-取到后先 `GET $WORKFLOW_API_BASE/me` 验证身份，再 `GET $WORKFLOW_API_BASE/projects/current` 验证 Host 解析出的项目与 membership 角色/权限。任一不通（401/403/204/404、网络失败或没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
-
-**写操作防呆**：任何写操作（建单/改单/流转/评论/附件）前，`/projects/current` 返回的 `project.subdomainPrefix` 必须与实际 API Host 以及 `.workflow` 所选 profile 的 `base_url` 子域一致，`membership.permissions` 也必须包含本次动作所需的角色权限；不一致或 `publicDemo=true` → 停下转 workflow-setup 重新绑定/分诊，**绝不把数据写进错误项目**。`membership.permissions` 不包含当前 PAT 的 scope，不能单独证明 token 可写；scope 未知时如实说明，绝不靠探测性写入验证，实际写端点的 403 仍按权限问题停止。
-
-## 真值原则（置顶）
-
-**本技能不内嵌端点与字段快照**——平台迭代快，快照必过期。每次调用前按三级现查：
-
-1. **L1** `https://workflow.games/llms.txt` —— 文档索引，先看有哪些指南。
-2. **L2** `https://workflow.games/md/guides/<slug>.md` —— 人读指南，字段口径与易错点。
-3. **L3** `https://workflow.games/openapi/gameflow.v1.yaml` —— 合同真值（约 9000 行，**grep 定位 operationId/path 后分段读**，不要整读）。
-
-L2 足够就不必下到 L3；路径、必填字段、枚举拿不准时以 L3 为准。
+写操作前按 connection.md 逐条过防呆检查（对应 G1）。
 
 ## 对象模型（三句话）
 
@@ -41,25 +43,19 @@ L2 足够就不必下到 L3；路径、必填字段、枚举拿不准时以 L3 �
 
 ## 动词分节
 
-- **建需求** → `POST /requirements`（`title` 必填）。
-- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；**建单前 `GET /search?q=` 查重**（单号精确 + 标题模糊），疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。
-- **查询** → `GET /work-items` 带过滤参数，**cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。
+- **建需求** → `POST /requirements`（只有 `title` 必填）。**不传 `status`**——需求恒落绑定工作流的初始态，创建接口根本不接受 status。
+- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；**建单前 `GET /search?q=` 查重**（单号精确 + 标题模糊），疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。同样**不传 `status`**，用户没给的字段一律不替他填。
+- **查询** → `GET /work-items` 带过滤参数，**cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。`/search` 是薄端点：只匹配标题、无全文检索、无 cursor，正文里的内容要靠列表端点翻页找。
 - **指派 / 改字段** → `PATCH /work-items/{id}`，带 `reason` 写明变更理由；省略的字段不改动。
 - **状态流转** → **先 `GET` 该对象的 transitions 端点**（`/work-items/{id}/transitions` 或 `/requirements/{id}/transitions`，确切路径按 L3 现查）看可用动作与 `allowed`，**再 `POST` 执行**；不硬 `PATCH status`——项目可配自定义工作流，状态词表不是固定枚举。
 - **评论** → `POST /comments`（`targetType` + `targetId` + Markdown `body`）。
 - **附件** → `POST /attachments`（multipart），模板见 `references/call-templates.md`。
 
-**每个写操作后 `GET` 读回验证**，向用户报：`displayKey` + UUID + 标题 + 可点链接（`https://<子域>.workflow.games/...`，优先用读回响应或搜索结果里的 deepLink）。
+读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接（`https://<子域>.workflow.games/...`，优先用读回响应或搜索结果里的 deepLink）。
 
-## 失败处置表
+## 失败处置
 
-| 状况 | 处置 |
-| --- | --- |
-| 422 | 按 ProblemDetails 的 errors 补齐/修正字段**重试一次**；第二次仍失败就停下，把 `traceId` 贴给用户 |
-| 401 / 403 | 转 workflow-setup 分诊，不在本技能里试来试去 |
-| 423 | 项目已冻结，**不重试**，转告用户找管理员解冻 |
-| 429 | 限流是 per-token 的（约 60 突发 / 120 每分钟）；按 `Retry-After` 退避重试，**至多 3 次**，并降低后续调用频率 |
-| 网络错误 / 5xx | **必须先查询确认是否已落库**（search 或列表），确认未落库才可重发——防重复建单 |
+按 [connection.md](references/connection.md) 的失败处置表执行（422 / 401 / 403 / 409 / 423 / 429 / 5xx）。最容易出事的一条：**网络错误或 5xx 之后必须先查询确认是否已落库，确认未落库才可重发**——这是重复建单的头号来源。
 
 ## 收尾
 
