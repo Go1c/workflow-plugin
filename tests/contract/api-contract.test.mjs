@@ -220,6 +220,21 @@ describe("离线不变量", () => {
     );
   });
 
+  test("硬闸门各处副本与 gates.md 逐字一致", () => {
+    const extract = (text) => {
+      const match = /<!-- gates:start -->\n([\s\S]*?)\n<!-- gates:end -->/.exec(text);
+      return match?.[1].trim() ?? null;
+    };
+    const canonical = extract(readFileSync(join(skillsRoot, "workflow-ops/references/gates.md"), "utf8"));
+    assert.ok(canonical, "gates.md 里找不到闸门块");
+
+    const copies = skillFiles.filter((file) => file.text.includes("<!-- gates:start -->"));
+    assert.ok(copies.length >= 3, "闸门块应至少存在于 gates.md 与两个 SKILL.md 中");
+    for (const copy of copies) {
+      assert.equal(extract(copy.text), canonical, `${copy.path} 的闸门块与 gates.md 不一致——闸门只能有一个版本`);
+    }
+  });
+
   test("凭证解析片段有且只有一份", () => {
     const owners = skillFiles
       .filter((file) => /export WORKFLOW_API_BASE=/.test(file.text))

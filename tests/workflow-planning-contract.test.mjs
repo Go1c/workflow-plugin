@@ -44,7 +44,8 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
   assert.match(skill, /规划、梳理或拆解/);
   assert.match(skill, /独立写入确认/);
   assert.match(skill, /不用于字段已明确的单次建单/);
-  assert.match(skill, /蓝图内容确认不等于线上写入授权/);
+  // 「内容认可 ≠ 写入授权」现由硬闸门 G2 承担，技能内联该闸门块。
+  assert.match(skill, /<!-- gates:start -->[\s\S]*不是写入授权[\s\S]*<!-- gates:end -->/);
   assert.match(skill, /用户只要求方案、PRD、拆解或提示词时.*停止/);
 
   const command = read("plugins/workflow/commands/plan.md");
