@@ -1,13 +1,13 @@
 ---
 name: workflow-ops
-description: 在 Workflow（workflow.games）项目里建需求、记 bug/缺陷、建任务、查询或搜索工作项、指派负责人、状态流转、写评论、上传附件时使用。所有写操作走 API 并读回验证。
+description: 在 Workflow（workflow.games）项目里执行字段与内容已经明确的单次操作，包括建一张需求、记 bug/缺陷、建任务、查询或搜索工作项、指派、状态流转、评论和附件。所有写操作走 API 并读回验证；模糊想法、PRD 梳理、多专业拆解或完整 Agent 提示词应使用 workflow-planning。
 ---
 
 # workflow-ops — 在 Workflow 里干活
 
 ## 与需求规划的边界
 
-用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆跨工种需求」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、复杂度判定、模板化蓝图和整体确认后的批量落单。
+用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆多专业/多交付轨道」「安排预研与并行 wave」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、交付拓扑判定、模板化蓝图和独立授权后的批量落单。
 
 本技能只处理已经明确的单次业务操作：建一张字段已定的需求/工作项、查询、指派、流转、评论或附件。不得把原始想法临场扩写成一套开发计划，也不得在建单后自动启动实现。
 
@@ -19,9 +19,9 @@ description: 在 Workflow（workflow.games）项目里建需求、记 bug/缺陷
 2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
 3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
 
-取到后先 `GET $WORKFLOW_API_BASE/me` 确认连接可用。不通（401/403/网络失败/没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
+取到后先 `GET $WORKFLOW_API_BASE/me` 验证身份，再 `GET $WORKFLOW_API_BASE/projects/current` 验证 Host 解析出的项目与 membership 角色/权限。任一不通（401/403/204/404、网络失败或没有配置）→ **转 workflow-setup 技能**处理，本技能不修配置。
 
-**写操作防呆**：任何写操作（建单/改单/流转/评论/附件）前，`/me` 返回的项目必须与 `.workflow` 指向 profile 的 `base_url` 子域一致；不一致 → 停下转 workflow-setup 重新绑定，**绝不把数据写进错误项目**。
+**写操作防呆**：任何写操作（建单/改单/流转/评论/附件）前，`/projects/current` 返回的 `project.subdomainPrefix` 必须与实际 API Host 以及 `.workflow` 所选 profile 的 `base_url` 子域一致，`membership.permissions` 也必须包含本次动作所需的角色权限；不一致或 `publicDemo=true` → 停下转 workflow-setup 重新绑定/分诊，**绝不把数据写进错误项目**。`membership.permissions` 不包含当前 PAT 的 scope，不能单独证明 token 可写；scope 未知时如实说明，绝不靠探测性写入验证，实际写端点的 403 仍按权限问题停止。
 
 ## 真值原则（置顶）
 

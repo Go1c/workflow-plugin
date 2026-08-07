@@ -24,7 +24,7 @@ if [ -z "$WORKFLOW_TOKEN" ] || [ -z "$WORKFLOW_API_BASE" ]; then
   done
   # 第 3 级：兜底 current_profile——仅单 profile 可静默用；多 profile 且无 .workflow 必须先问用户
   if [ -z "$PROFILE" ] && [ -f "$CONFIG" ]; then
-    PROFILE_COUNT=$(grep -c '^\[profiles\.' "$CONFIG" 2>/dev/null || echo 0)
+    PROFILE_COUNT=$(grep -c '^\[profiles\.' "$CONFIG" 2>/dev/null || true)
     if [ "$PROFILE_COUNT" -gt 1 ]; then
       echo "config 里多个 profile 且当前目录没有 .workflow：停下问用户绑哪个项目，写 .workflow 再继续" >&2
     else
@@ -45,6 +45,17 @@ fi
 ```
 
 之后任何输出里 token 只以 `wfp_` + 前 8 位指代，不回显完整值。
+
+## 验证身份与当前项目
+
+`/me` 只验证用户身份；当前项目、项目角色和权限必须从 Host 感知的 `/projects/current` 读取，不得假设 `/me` 含项目字段。
+
+```bash
+curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/me"
+curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects/current"
+```
+
+写操作前核对 `project.subdomainPrefix` 与 API Host/profile 子域一致，并检查 `membership.permissions` 与 `publicDemo`。membership 只反映角色侧权限，不包含当前 PAT scope；不得用探测性写入测试 scope。
 
 ## 建需求
 

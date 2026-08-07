@@ -7,7 +7,9 @@ description: 首次接入 Workflow（workflow.games）、还没有账号或 API 
 
 ## 完成判据（先看这个）
 
-`GET <base_url>/api/v1/me` 返回 200，并且你已经向用户报告：**「以 <用户名> 连接到项目 <项目>，角色 <角色>」**。没走到这一步，接入就不算完成——中间任何分支做完都要回到这条验证。
+`GET $WORKFLOW_API_BASE/me` 返回 200，且 `GET $WORKFLOW_API_BASE/projects/current` 返回 200；从前者读用户，从后者读 `project` 与 `membership`，再向用户报告：**「以 <用户名> 连接到项目 <项目>，角色 <角色>」**。没走到这一步，接入就不算完成——中间任何分支做完都要回到这条验证。
+
+这只证明身份、项目和角色连接正确，不证明 PAT scope 可写；`membership.permissions` 是角色侧权限。不要为了测试 scope 创建或修改业务对象，真正写操作若返回 403 再按权限分诊。
 
 ## Step 0 — 静默探测（每次都先做，不问用户）
 
@@ -17,12 +19,15 @@ description: 首次接入 Workflow（workflow.games）、还没有账号或 API 
 2. `.workflow` 标记：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`；该 profile 不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
 3. 全局 `current_profile` 兜底，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
 
-取到凭证 → 探测 `GET <base_url>/api/v1/me`。探测通过 → 直接按完成判据报告，结束本技能。探测失败或全局 config 不存在 → 按下面分支走。
+规范化 API 根地址：环境变量 `WORKFLOW_API_BASE` 已以 `/api/v1` 结尾；config 里的 `base_url` 是站点根，读取后只追加一次 `/api/v1`。出现重复后缀或非 HTTPS 项目 Host 就停止分诊，不猜测修剪。
+
+取到凭证 → 依次探测 `GET $WORKFLOW_API_BASE/me` 与 `GET $WORKFLOW_API_BASE/projects/current`。两者通过且项目与 profile 一致 → 直接按完成判据报告，结束本技能。探测失败或全局 config 不存在 → 按下面分支走。
 
 curl 携带 token 一律走环境变量，不把明文拼进命令行：
 
 ```bash
 curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/me"
+curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects/current"
 ```
 
 ## 项目绑定与多项目（`.workflow` 标记）
@@ -91,12 +96,14 @@ EOF
 
 ## 验证与分诊
 
-写盘后立刻探测 `GET <base_url>/api/v1/me`，按结果分诊：
+写盘后立刻探测 `GET $WORKFLOW_API_BASE/me` 和 `GET $WORKFLOW_API_BASE/projects/current`，按结果分诊：
 
-- **401** → token 失效或粘贴不完整：检查是否有 `wfp_` 前缀、是否粘进了换行/空格。让用户重发或重建 token 后重配。
-- **403 但 `/me` 是通的** → 权限问题，先问两件事：① token 是不是 `read_only`？② 用户角色是否最近被管理员调小？给一段找管理员的话术；**不建议**借他人 token 绕权限。
-- **`/me` 返回的项目 ≠ 目标项目** → token 绑错项目：token 只认自己的项目，去目标项目的设置页另建一枚 token，配成新 profile。
-- **`/me` 返回的项目 ≠ 当前目录 `.workflow` 绑定指向的项目** → 凭证与目录绑定打架：先问用户要在哪个项目干活；改 `.workflow` 指向正确 profile，或为该项目走分支 B/C 补一枚 token，绝不带着错绑定继续写数据。
+- **任一端点 401** → token 失效或粘贴不完整：检查是否有 `wfp_` 前缀、是否粘进了换行/空格。让用户重发或重建 token 后重配。
+- **`/me` 200、业务端点 403** → token 绑定项目、token scope 或用户实时角色权限不满足。先核对子域/profile，再问 token 是否为 `read_only`、角色是否被调小；**不建议**借他人 token 绕权限。
+- **`/projects/current` 204** → API Host 是中央面/运营面，不是项目子域；修正 profile 的 `base_url` 后重试。
+- **`/projects/current` 404** → Host 指向的项目不存在或尚未开通；核对子域前缀和项目状态。
+- **`/projects/current` 返回的 `project.subdomainPrefix` ≠ profile 的 `base_url` 子域或目标项目** → 凭证、Host 与目录绑定打架：先问用户要在哪个项目干活；改 `.workflow` 指向正确 profile，或为目标项目走分支 B/C 补一枚 token，绝不带着错绑定继续写数据。
+- **`membership.permissions` 不含目标动作权限或 `publicDemo=true`** → 当前连接只读或角色受限；报告实际角色/权限并请项目管理员调整，不绕过服务端权限。
 - **config 里多个 profile、当前目录又没有 `.workflow`** → 歧义，不得静默挑一个：问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续。
 - **域名解析失败** → 回显 `base_url` 让用户核对子域前缀拼写。
 

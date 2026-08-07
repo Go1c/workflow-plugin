@@ -2,14 +2,14 @@
 
 > Agent plugin for Workflow (workflow.games) — lets AI coding agents create requirements, file bugs, query work items and drive workflows via the Workflow API.
 
-让你的 AI Agent（Claude Code / Codex 等）直连 [Workflow](https://workflow.games)：接入配置、建需求、记 bug、查任务、状态流转、查文档——全部走 Workflow 的公开 API，写操作有读回验证，token 全程不外泄。
+让你的 AI Agent（Claude Code / Codex 等）直连 [Workflow](https://workflow.games)：接入配置、规划与创建需求、记 bug、查任务、状态流转、查文档——全部走 Workflow 的公开 API，写操作有读回验证，token 全程不外泄。
 
 ## 包含的技能
 
 | 技能 | 干什么 |
 | --- | --- |
 | `workflow-setup` | 首次接入：注册引导、配置 API token、验证连接、401/403 分诊 |
-| `workflow-planning` | 规划：把一句话或文档讨论成简单需求或跨工种需求室，每张专业需求都是完整 Agent 提示词 |
+| `workflow-planning` | 规划：把想法或文档讨论成单一需求或多交付轨道需求室，每张可执行专业需求都是完整 Agent 提示词 |
 | `workflow-ops` | 干活：建需求、记 bug（含查重）、查询、指派、流转、评论、附件 |
 | `workflow-docs` | 答疑：抓线上文档回答 API / 功能问题，不凭记忆 |
 | `workflow-update` | 检查并更新插件自身版本 |
@@ -54,9 +54,11 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 ## 从想法到开发需求
 
-对 Agent 说「规划这个需求」或使用 `/workflow:plan`。Agent 会先读取输入与项目规范，再一次只问一个会改变方案的问题。单工种产出一张 Requirement；跨工种产出一个 Requirement Room，并按需求定义、UX/UI 与可选美术、QA 测试用例、程序公共底座、程序功能、整体 Code Review、QA 收尾的顺序生成专业需求。
+对 Agent 说「规划这个需求」或使用 `/workflow:plan`。Agent 会先读取输入与项目规范，再一次只问一个真正改变蓝图的问题。一个 Agent 能独立交付和验收的成果产出一张 Requirement；需要多个专业/技术轨道、预研门、并行 wave 或集成点时产出 Requirement Room。每张可执行 Requirement 都会写成不依赖原对话的完整 Agent 提示词。
 
-整套蓝图确认前不会写入 Workflow。确认落单后也只创建 PM 对象，不会自动开始编码；专业需求正式开工时才按目标仓库规则拆 WorkItem。
+质量闸按变更类型选择：代码路径包含风险驱动用例、TDD 或经说明的替代验证、集成候选、整体 Review 与最终 QA；资产/内容路径使用专业评审、导入和在引擎/目标平台验证，不生成空的程序卡。
+
+蓝图内容确认与线上写入是两个闸门。只有 Agent 展示目标项目、修订号、查重结果和准确对象数量，且你明确授权落单后才会写入 Workflow。落单也只创建获授权的 PM 对象与结构化验收项，不会自动开始编码；专业需求正式开工时才按目标仓库规则拆 WorkItem。
 
 ## 更新
 
