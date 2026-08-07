@@ -1,43 +1,182 @@
+<div align="center">
+
 # Workflow Agent 插件
 
-> Agent plugin for Workflow (workflow.games) — lets AI coding agents create requirements, file bugs, query work items and drive workflows via the Workflow API.
+### 你的 AI 会写代码，但它不会替你管项目。<br/>现在会了。
 
-让你的 AI Agent（Claude Code / Codex 等）直连 [Workflow](https://workflow.games)：接入配置、规划与创建需求、记 bug、查任务、状态流转、查文档——全部走 Workflow 的公开 API，写操作有读回验证，token 全程不外泄。
+**把 Claude Code / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转，全部由 Agent 自己落单。**
 
-## 包含的技能
+![version](https://img.shields.io/badge/version-0.3.0-2ea44f) ![skills](https://img.shields.io/badge/skills-5-blue) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
-| 技能 | 干什么 |
-| --- | --- |
-| `workflow-setup` | 首次接入：注册引导、配置 API token、验证连接、401/403 分诊 |
-| `workflow-planning` | 规划：把想法或文档讨论成单一需求或多交付轨道需求室，每张可执行专业需求都是完整 Agent 提示词 |
-| `workflow-ops` | 干活：建需求、记 bug（含查重）、查询、指派、流转、评论、附件 |
-| `workflow-docs` | 答疑：抓线上文档回答 API / 功能问题，不凭记忆 |
-| `workflow-update` | 检查并更新插件自身版本 |
+</div>
 
-使用前提：一个 workflow.games 账号和项目 API token——没有也没关系，装好后对 Agent 说「接入 Workflow」，`workflow-setup` 会一步步带你完成。
+---
 
-## Claude Code 安装
+## 你每天都在忍受的三件事
 
-在 Claude Code 里执行两条命令：
+<table>
+<tr><td width="33%" valign="top">
 
-```
+### 😤 代码写完了，看板还是空的
+
+Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都没有。需求要补、bug 要录、状态要挪 —— **AI 干活，你做文员。**
+
+</td><td width="33%" valign="top">
+
+### 🔥 让 AI 碰 API？它敢把单开进隔壁项目
+
+编一个不存在的字段、建三张重复单、把 token 打进日志、在你说"这方案不错"的下一秒就哐哐往线上写了 17 张卡 —— **一次翻车，够你清理一下午。**
+
+</td><td width="33%" valign="top">
+
+### 💨 "帮我规划一下需求"，得到一段聊天记录
+
+不是任务，是对话。关掉窗口就没了，派给另一个 Agent 它看不懂，交给同事他得重问一遍。**规划的结果没法执行，等于没规划。**
+
+</td></tr>
+</table>
+
+这个插件就是来解决这三件事的。**不是给 AI 加个"能调 API"的开关 —— 而是给它一整套敢放它上生产的纪律。**
+
+---
+
+## 它到底干什么
+
+| 技能 | 一句话 |
+| :-- | :-- |
+| 🔌 `workflow-setup` | 从零接入：注册引导 → 建 token → 写配置 → 验证连接 → 401/403 现场分诊 |
+| 🧠 `workflow-planning` | **把一句话变成一套能直接派活的开发蓝图** —— 判定单需求还是需求室、拆交付轨道、排并行 wave、写验收 |
+| ⚡ `workflow-ops` | 干活：建需求、记 bug（自带查重）、查任务、指派、流转、评论、附件 |
+| 📖 `workflow-docs` | 答疑：现抓线上文档和 OpenAPI 合同回答，**不凭记忆瞎编** |
+| 🔄 `workflow-update` | 自检版本、校验 sha256、安全自更新 |
+
+---
+
+## 30 秒装好
+
+**Claude Code**
+
+```bash
 /plugin marketplace add Go1c/workflow-plugin
 /plugin install workflow@workflow-plugin
 ```
 
-装好后可用 `/workflow:setup`（接入）、`/workflow:plan <描述>`（规划需求）、`/workflow:bug <描述>`（记 bug）、`/workflow:update`（更新插件）。
-
-## Codex 安装
-
-一条命令：
+**Codex / 手动安装**
 
 ```bash
 curl -fsSL https://workflow.games/plugin/install.sh | bash
 ```
 
-默认装到 `~/.codex/skills`；也可以 `--target ~/.claude/skills`（Claude Code 手动安装）或 `--target .agents/skills`（项目级安装）。
+> 默认装到 `~/.codex/skills`；也可 `--target ~/.claude/skills` 或 `--target .agents/skills`（项目级）。
 
-不想跑脚本？把下面这段原样发给你的 AI Agent，效果等价：
+没有账号也不要紧 —— 装完直接对 Agent 说 **「接入 Workflow」**，`workflow-setup` 一步步带你走完注册、建 token、写配置、验证连接。
+
+装好即得四个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:update`。
+
+---
+
+## 见识一下
+
+### 🧠 一句话 → 一套能执行的蓝图
+
+```
+/workflow:plan 战斗结算界面要能显示本局评分和掉落
+```
+
+Agent 会先读你的输入、仓库里的 `AGENTS.md` / `CLAUDE.md` / 设计文档和现有实现，**一次只问一个真正会改变蓝图的问题**（不会拿一堆它自己能查到的事情来烦你），然后判定形态：
+
+- 一个 Agent 能独立交付、独立验收 → **一张 Requirement**
+- 要拆客户端 / 服务端 / 美术 / 工具链，有预研门、并行 wave、共享合同 → **一间 Requirement Room**
+
+关键在于：**每张可执行需求都是一份自包含的 Agent 提示词。**
+
+> 身份、真值优先级、执行前置、决策权限、拥有范围与共享热点、详细要求、验证证据、必须交付、验收标准、禁止事项、阻塞升级、交回格式 —— 十二节全部填满。
+
+它不依赖原始对话。你可以把它丢给三天后的另一个 Agent、丢给刚入职的同事、丢给一个全新的 session —— **照样跑得起来。**
+
+质量闸门还会按变更类型自动选路：代码走风险驱动用例 + TDD + 集成 + 整体 Review + 最终 QA；美术、文案、配置走专业评审 + 导入 + 在引擎验证 —— **不会给一张贴图需求硬塞一个 Code Review 卡。**
+
+### ⚡ 记个 bug，顺手帮你查重
+
+```
+/workflow:bug 结算页负责人显示成了原始 id
+```
+
+建单前先 `GET /search` 查重 → 撞上疑似重复**先报给你**（不默默建第二张）→ 建单 → `GET` 读回 → 汇报 `displayKey` + UUID + 可点链接 + 实际落库的字段值。
+
+**「记一下」就只记录** —— 不提修复方案、不扩写成开发任务、不擅自开始改代码。
+
+---
+
+## 为什么敢让它碰你的线上数据
+
+这才是这个插件真正花力气的地方。
+
+<table>
+<tr><td width="50%" valign="top">
+
+**🚦 双闸门授权**
+
+**蓝图内容确认与线上写入是两个闸门。** 你说"方案不错"只是内容批准。想落单？Agent 必须先亮出：目标项目、蓝图修订号、查重结果、**准确的对象数量**，然后明确问你一句「是否写入」。范围一变，授权立即作废、重新确认。
+
+**🔍 写完必读回**
+
+每个 POST/PATCH 之后强制 `GET` 回读。**没有读回证据，不许说"已创建"。** 部分成功就报部分成功，列清哪些落库、哪些没有。
+
+**🧯 幂等恢复**
+
+网络断了、5xx 了 —— 先查是否已落库，确认没有才重发。已成功的对象绝不重建，只补缺失的子资源。**杜绝重复建单。**
+
+</td><td width="50%" valign="top">
+
+**🎯 绝不写错项目**
+
+写操作前强制核对 `project.subdomainPrefix` 与实际 API Host、与 `.workflow` 绑定的 profile 三方一致。对不上就**停**。`.workflow` 存在但解析不出来？也**停** —— 绝不悄悄回落到全局默认项目。
+
+**🔐 token 全程不外泄**
+
+只走环境变量，不进命令行明文。任何输出（汇报、日志、报错）里只以 `wfp_` + 前 8 位指代。更新流程绝不触碰你的 `config.toml`。
+
+**📡 字段以合同为准，不凭记忆**
+
+平台自定义的工作流状态、验收类型、缺陷自定义字段一律**现查**，查不到就留空并告诉你 —— **不猜一个值填进去**。
+
+</td></tr>
+</table>
+
+> 还有一条边界写死在提示词里：**落单不等于开工。** Agent 只创建你授权的 PM 对象和结构化验收项，不建 WorkItem、不流转状态、不创建 Worktree、不跑你仓库的测试、不动一行代码。
+
+---
+
+## 一台机器，多个项目
+
+插件全局装一份就够，不必按项目重复安装。
+
+```
+~/.config/workflow/config.toml     每个项目一节 [profiles.<名>]，各放各的 token
+<你的仓库>/.workflow               一行 profile = "<名>"，不含 token，可提交给全队共享
+```
+
+凭证按 **环境变量 → `.workflow` 标记 → 全局 `current_profile`** 三级解析 —— **人在哪个目录干活，就连哪个项目**，不用手动切。配置里有多个 profile 而当前目录没绑定？Agent 会停下来问你，而不是猜。
+
+首次在某个项目目录接入时，`workflow-setup` 会引导你建 token 并写好 `.workflow`。
+
+---
+
+## 更新
+
+| 安装方式 | 怎么更新 |
+| :-- | :-- |
+| Claude Code（marketplace） | 支持 autoUpdate 自动升级，也可在 `/plugin` 界面手动更新 |
+| Codex / 手动安装 | 对 Agent 说「更新 workflow 插件」—— 查线上版本 → 逐文件校验 sha256 → 备份旧版 → 就位 |
+
+自更新只从 `workflow.games` 域下载，技能包只允许 `.md` 与 `VERSION` 纯文本 —— **清单里出现任何可执行文件，立即中止并告警。**
+
+---
+
+## 不想跑安装脚本？
+
+把这段原样发给你的 AI Agent，效果等价：
 
 ```
 请为我安装 Workflow（workflow.games）Agent 插件：
@@ -48,23 +187,12 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 5. 然后直接开始 workflow-setup 技能的接入流程：先检测本机 ~/.config/workflow/config.toml 是否已有可用配置。
 ```
 
-## 多项目
+---
 
-一台机器接多个项目：插件全局只装一份，不必按项目重复安装。每个项目在该项目设置页各建一枚 token，在 `~/.config/workflow/config.toml` 里各占一节 `[profiles.<名>]`；再在每个项目的仓库根放一个 `.workflow` 标记文件（一行 `profile = "<profile 名>"`），声明这个目录用哪个 profile。`.workflow` 不含 token，可提交进版本库与全队共享。Agent 取凭证按「环境变量 → `.workflow` 标记 → 全局 `current_profile` 兜底」三级解析——在哪个项目目录里干活就连哪个项目。首次在某个项目目录接入时，`workflow-setup` 会引导建 token 并写好 `.workflow`。
+<div align="center">
 
-## 从想法到开发需求
+**完整安装与使用指南 → [workflow.games/wiki/guides/agent-plugin](https://workflow.games/wiki/guides/agent-plugin)**
 
-对 Agent 说「规划这个需求」或使用 `/workflow:plan`。Agent 会先读取输入与项目规范，再一次只问一个真正改变蓝图的问题。一个 Agent 能独立交付和验收的成果产出一张 Requirement；需要多个专业/技术轨道、预研门、并行 wave 或集成点时产出 Requirement Room。每张可执行 Requirement 都会写成不依赖原对话的完整 Agent 提示词。
+*让 AI 把活干完，也把单落完。*
 
-质量闸按变更类型选择：代码路径包含风险驱动用例、TDD 或经说明的替代验证、集成候选、整体 Review 与最终 QA；资产/内容路径使用专业评审、导入和在引擎/目标平台验证，不生成空的程序卡。
-
-蓝图内容确认与线上写入是两个闸门。只有 Agent 展示目标项目、修订号、查重结果和准确对象数量，且你明确授权落单后才会写入 Workflow。落单也只创建获授权的 PM 对象与结构化验收项，不会自动开始编码；专业需求正式开工时才按目标仓库规则拆 WorkItem。
-
-## 更新
-
-- **Claude Code（marketplace 安装）**：marketplace 支持 autoUpdate 自动升级；也可以在 `/plugin` 界面手动更新。
-- **Codex / 手动安装**：对 Agent 说「更新 workflow 插件」，`workflow-update` 技能会查线上版本、校验 sha256 后自更新。
-
-## 文档
-
-完整安装与使用指南：https://workflow.games/wiki/guides/agent-plugin
+</div>
