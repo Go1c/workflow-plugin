@@ -18,7 +18,12 @@ if [ -z "$WORKFLOW_TOKEN" ] || [ -z "$WORKFLOW_API_BASE" ]; then
   # 第 2 级：从当前目录向上找最近的 .workflow（到含 .git 的目录或文件系统根为止）
   DIR="$PWD"; PROFILE=""
   while :; do
-    [ -f "$DIR/.workflow" ] && PROFILE=$(sed -n 's/^profile = "\(.*\)"$/\1/p' "$DIR/.workflow") && break
+    if [ -f "$DIR/.workflow" ]; then
+      PROFILE=$(sed -n 's/^[[:space:]]*profile[[:space:]]*=[[:space:]]*"\([^"]*\)".*$/\1/p' "$DIR/.workflow" | head -1)
+      # 标记文件存在但解析落空（行内注释、单引号、拼写错）→ 停止，绝不回落全局 profile
+      [ -z "$PROFILE" ] && { echo "找到 $DIR/.workflow 但解析不出 profile：停下让用户修，不使用全局兜底" >&2; return 1 2>/dev/null || exit 1; }
+      break
+    fi
     { [ -e "$DIR/.git" ] || [ "$DIR" = "/" ]; } && break
     DIR=$(dirname "$DIR")
   done
@@ -33,9 +38,13 @@ if [ -z "$WORKFLOW_TOKEN" ] || [ -z "$WORKFLOW_API_BASE" ]; then
   fi
   if [ -n "$PROFILE" ] && [ -f "$CONFIG" ]; then
     BASE=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^base_url = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
-    if [ -n "$BASE" ]; then
+    TOK=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^token = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
+    if [ -n "$BASE" ] && [ -n "$TOK" ]; then
       export WORKFLOW_API_BASE="$BASE/api/v1"
-      export WORKFLOW_TOKEN=$(sed -n "/^\[profiles\.$PROFILE\]$/,/^\[/s/^token = \"\(.*\)\"$/\1/p" "$CONFIG" | head -1)
+      export WORKFLOW_TOKEN="$TOK"
+    elif [ -n "$BASE" ]; then
+      # 有 base_url 没 token：不导出半截凭证，转 workflow-setup 补 token
+      echo "profile「$PROFILE」缺 token：转 workflow-setup 为这个项目建 token" >&2
     else
       # .workflow 指向的 profile 在 config 里不存在：不导出半截凭证，转 workflow-setup 为该项目补 token
       echo "profile「$PROFILE」在 config.toml 里不存在：转 workflow-setup 为这个项目建 token" >&2
@@ -75,10 +84,12 @@ curl -sS -X POST "$WORKFLOW_API_BASE/work-items" \
   --data '{
     "title":"结算页负责人显示为原始 id",
     "description":"现象：…\n期望：…\n证据：…\n仅记录 bug，不启动修复。",
-    "type":"bug","status":"todo","priority":"P1","severity":"major",
+    "type":"bug","priority":"P1",
     "reason":"线上反馈记录，不启动修复"
   }'
 ```
+
+**不传 `status`**：后端按项目绑定的工作流落初始态；显式传的值要过该工作流的合法状态集校验，硬写 `todo` 在改过初始态名的项目上必 422。`severity` 同理——用户没评估就不传，别默认 `major`（见 bug-fields.md）。
 
 ## 查重 / 搜索
 
@@ -88,6 +99,8 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
 ```
 
 单号（`R-00001` / `B-00042`）走精确匹配；返回的 `deepLink` 可直接拼成 `https://<子域>.workflow.games<deepLink>` 给用户。
+
+**能力边界**：`/search` 是薄端点——只对**标题**做 ILIKE 模糊匹配，**不做全文检索**，正文/描述里的内容搜不到，也没有 cursor 分页（只有 `limit`）。要按描述里的标记找对象，必须走对应列表端点分页逐条比对，不能指望 search。
 
 ## 列表取全量（cursor 循环）
 

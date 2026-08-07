@@ -41,9 +41,9 @@ L2 足够就不必下到 L3；路径、必填字段、枚举拿不准时以 L3 �
 
 ## 动词分节
 
-- **建需求** → `POST /requirements`（`title` 必填）。
-- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；**建单前 `GET /search?q=` 查重**（单号精确 + 标题模糊），疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。
-- **查询** → `GET /work-items` 带过滤参数，**cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。
+- **建需求** → `POST /requirements`（只有 `title` 必填）。**不传 `status`**——需求恒落绑定工作流的初始态，创建接口根本不接受 status。
+- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；**建单前 `GET /search?q=` 查重**（单号精确 + 标题模糊），疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。同样**不传 `status`**，用户没给的字段一律不替他填。
+- **查询** → `GET /work-items` 带过滤参数，**cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。`/search` 是薄端点：只匹配标题、无全文检索、无 cursor，正文里的内容要靠列表端点翻页找。
 - **指派 / 改字段** → `PATCH /work-items/{id}`，带 `reason` 写明变更理由；省略的字段不改动。
 - **状态流转** → **先 `GET` 该对象的 transitions 端点**（`/work-items/{id}/transitions` 或 `/requirements/{id}/transitions`，确切路径按 L3 现查）看可用动作与 `allowed`，**再 `POST` 执行**；不硬 `PATCH status`——项目可配自定义工作流，状态词表不是固定枚举。
 - **评论** → `POST /comments`（`targetType` + `targetId` + Markdown `body`）。

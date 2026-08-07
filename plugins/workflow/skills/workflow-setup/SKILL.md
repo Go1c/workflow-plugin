@@ -37,6 +37,7 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 - **位置**：项目仓库根（或当前工作目录）。查找规则：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止。
 - **内容**：一行 TOML——`profile = "<profile 名>"`（双引号）；允许**整行** `#` 注释（不支持行内注释，会导致解析落空）；仅此一键，**不含 token**，可提交进版本库与全队共享（每人的 token 仍在各自全局 config 里）。
 - **写入时机**：setup 完成项目绑定时问用户「要不要把绑定写进当前项目（`.workflow` 文件）」，默认写。
+- **解析落空 = 停止，不回落**：`.workflow` 存在但读不出 profile 名（写了行内注释、用了单引号、键名拼错）时，**必须停下让用户修**，绝不悄悄改用全局 `current_profile`——那正好会把数据写进另一个项目，是这套绑定机制要防的唯一一件事。
 
 `.workflow` 是独立文件，**绝不合并进 `config.toml`**——`config.toml` 的格式合同一个键都不能加（见分支 C 的写盘规则）。
 
@@ -105,6 +106,7 @@ EOF
 - **`/projects/current` 返回的 `project.subdomainPrefix` ≠ profile 的 `base_url` 子域或目标项目** → 凭证、Host 与目录绑定打架：先问用户要在哪个项目干活；改 `.workflow` 指向正确 profile，或为目标项目走分支 B/C 补一枚 token，绝不带着错绑定继续写数据。
 - **`membership.permissions` 不含目标动作权限或 `publicDemo=true`** → 当前连接只读或角色受限；报告实际角色/权限并请项目管理员调整，不绕过服务端权限。
 - **config 里多个 profile、当前目录又没有 `.workflow`** → 歧义，不得静默挑一个：问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续。
+- **`.workflow` 存在但解析不出 profile** → 停止并回显该文件内容，让用户改成 `profile = "<名>"`（双引号、不带行内注释）；期间不得回落全局 `current_profile`。
 - **域名解析失败** → 回显 `base_url` 让用户核对子域前缀拼写。
 
 多项目 = 每项目一枚 token + 一节 `[profiles.<名>]` + 一个 `.workflow` 标记（见「项目绑定与多项目」）；切换项目靠所在目录的 `.workflow` 指向，不靠改全局 `current_profile`。
