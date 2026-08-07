@@ -28,6 +28,7 @@
 - 新增**反重复**断言：含凭证解析片段的文件必须有且只有 `connection.md`。
 - 新增 `package.json`（`npm test`）与 GitHub Actions CI；此前测试从未在 CI 跑过，且 `node --test tests/` 会因目录解析报 `MODULE_NOT_FOUND`。
 - CI 增加版本一致性检查：`VERSION` / `plugin.json` / `package.json` 三者相同，且 `CHANGELOG.md` 有对应条目。
+- **新增 L2 合同一致性测试**（`tests/contract/`，`npm run test:contract`）：以线上 OpenAPI 为真值，检查技能里出现的每个 API 路径都存在于合同、`bug-fields` 表里写的枚举值都在合同 enum 内、合同声明了 `maxLength` 的字段技能里必须写明、本地 `VERSION` 不低于线上发布版本；另含离线不变量（不得写死 `status`、凭证片段只此一份、技能包只含文本、清单齐备）。网络不可达时 skip 而非 fail。CI 每周一定时跑一次——平台改合同时提前收到红灯，而不是等用户撞 422。
 
 ## [0.3.0]
 

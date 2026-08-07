@@ -1,0 +1,251 @@
+// L2 合同一致性测试：拿线上 OpenAPI 当真值，检查技能里写死的东西有没有漂移。
+//
+// 存在的理由：这个插件的核心假设是「平台迭代快」，但仓库此前没有任何机制能在
+// 平台改了合同时发现——全靠用户撞 422 才知道。本轮修的 3 个问题
+// （硬编码 status、severity 默认注入、缺 maxLength 约束）都是这层能自动抓到的。
+//
+// 网络不可达时整体 skip 而不是 fail：CI 里它是护栏，不该变成噪音来源。
+
+import { test, before, describe } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { dirname, extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const skillsRoot = join(repoRoot, "plugins/workflow/skills");
+
+const OPENAPI_URL = "https://workflow.games/openapi/gameflow.v1.yaml";
+const VERSION_URL = "https://workflow.games/plugin/version.json";
+const TIMEOUT_MS = 20_000;
+
+function listFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = join(directory, entry.name);
+    return entry.isDirectory() ? listFiles(absolute) : [absolute];
+  });
+}
+
+const skillFiles = listFiles(skillsRoot)
+  .filter((file) => extname(file) === ".md")
+  .map((file) => ({ path: relative(repoRoot, file), text: readFileSync(file, "utf8") }));
+
+const allSkillText = skillFiles.map((file) => file.text).join("\n");
+
+async function fetchText(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`${url} → HTTP ${response.status}`);
+  return response.text();
+}
+
+// ---- 极简 YAML 取值：合同格式很规整，为一个护栏测试引依赖不值当 ----
+
+function contractPaths(yaml) {
+  return new Set(
+    yaml
+      .split("\n")
+      .map((line) => /^ {2}(\/\S*):\s*$/.exec(line))
+      .filter(Boolean)
+      .map((match) => normalizePath(match[1])),
+  );
+}
+
+/** `/work-items/{workItemId}/transitions` 与 `/work-items/<uuid>/transitions` 归一成同一形状。 */
+function normalizePath(path) {
+  return path
+    .replace(/\{[^}]*\}/g, "{}")
+    .replace(/<[^>]*>/g, "{}")
+    .replace(/\/$/, "");
+}
+
+function schemaEnum(yaml, schemaName, fieldName) {
+  const lines = yaml.split("\n");
+  const start = lines.findIndex((line) => new RegExp(`^ {4}${schemaName}:\\s*$`).test(line));
+  if (start < 0) return null;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^ {4}\S/.test(lines[i])) break; // 到下一个同级 schema
+    const match = new RegExp(`^\\s+${fieldName}:\\s*\\{.*enum:\\s*\\[([^\\]]+)\\]`).exec(lines[i]);
+    if (match) return match[1].split(",").map((value) => value.trim());
+  }
+  return null;
+}
+
+function schemaMaxLengths(yaml, schemaName) {
+  const lines = yaml.split("\n");
+  const start = lines.findIndex((line) => new RegExp(`^ {4}${schemaName}:\\s*$`).test(line));
+  if (start < 0) return {};
+  const found = {};
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^ {4}\S/.test(lines[i])) break;
+    const match = /^\s+(\w+):\s*\{.*maxLength:\s*(\d+)/.exec(lines[i]);
+    if (match) found[match[1]] = Number(match[2]);
+  }
+  return found;
+}
+
+/**
+ * 技能正文里当作 API 调用出现的路径。
+ *
+ * 按「出现的语境」抓而不是按资源名白名单抓——白名单会漏掉技能里凭空发明的新端点
+ * （正是最该被抓住的那种错），而语境限定同时挡掉了站点 URL 和 Markdown 相对链接。
+ */
+function mentionedPaths(text) {
+  const contexts = [
+    /\$WORKFLOW_API_BASE(\/[A-Za-z0-9_./{}<>-]*)/g, // curl "$WORKFLOW_API_BASE/work-items"
+    /\b(?:GET|POST|PATCH|PUT|DELETE)\s+`?(\/[A-Za-z0-9_./{}<>-]+)/g, // 「POST /requirements」
+  ];
+  const found = new Set();
+  for (const pattern of contexts) {
+    for (const match of text.matchAll(pattern)) {
+      const path = normalizePath(match[1]).replace(/[.,;:)）】」`]+$/, "");
+      if (path && path !== "/") found.add(path);
+    }
+  }
+  return found;
+}
+
+let yaml = null;
+let onlineVersion = null;
+let offlineReason = null;
+
+before(async () => {
+  try {
+    yaml = await fetchText(OPENAPI_URL);
+    onlineVersion = JSON.parse(await fetchText(`${VERSION_URL}?cb=${process.env.CB ?? "ci"}`)).version;
+  } catch (error) {
+    offlineReason = `抓不到线上合同（${error.message}）——跳过，不作为失败`;
+  }
+});
+
+describe("L2 合同一致性", () => {
+  test("技能里出现的每个 API 路径都存在于线上合同", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    const known = contractPaths(yaml);
+    const missing = [];
+    for (const file of skillFiles) {
+      for (const path of mentionedPaths(file.text)) {
+        if (!known.has(path)) missing.push(`${file.path} → ${path}`);
+      }
+    }
+    assert.deepEqual(missing, [], `以下路径在合同里找不到（平台改了，或技能写错了）：\n${missing.join("\n")}`);
+  });
+
+  test("bug-fields 表里写的枚举值都在合同 enum 内", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    // 值从技能正文里现读，不写死在测试里——否则改坏了技能，测试照样绿。
+    const bugFields = readFileSync(join(skillsRoot, "workflow-ops/references/bug-fields.md"), "utf8");
+    const rows = [
+      { field: "severity", schema: "CreateWorkItemRequest" },
+      { field: "priority", schema: "CreateWorkItemRequest" },
+      { field: "type", schema: "CreateWorkItemRequest" },
+    ];
+    for (const { field, schema } of rows) {
+      const row = bugFields.split("\n").find((line) => line.startsWith(`| \`${field}\``));
+      assert.ok(row, `bug-fields.md 里找不到 \`${field}\` 那一行——表格结构变了，请同步本测试`);
+
+      const allowed = schemaEnum(yaml, schema, field);
+      assert.ok(allowed, `合同里找不到 ${schema}.${field} 的 enum——schema 可能已改名`);
+
+      const declared = [...row.matchAll(/`([A-Za-z][A-Za-z0-9_]*)`/g)]
+        .map((match) => match[1])
+        .filter((token) => token !== field); // 行首那个字段名本身不算值
+      assert.ok(declared.length > 0, `\`${field}\` 那一行没写出任何词表值`);
+      for (const value of declared) {
+        assert.ok(
+          allowed.includes(value),
+          `bug-fields.md 的 \`${field}\` 写了 "${value}"，但合同 enum 只有 [${allowed}]`,
+        );
+      }
+    }
+
+    // 这几个不在表格里，按用法点检。
+    for (const [schema, field, value] of [
+      ["CreateRequirementRequest", "risk", "medium"],
+      ["CreateAcceptanceItemRequest", "sourceKind", "ai"],
+      ["CreateCommentRequest", "targetType", "bug"],
+    ]) {
+      const allowed = schemaEnum(yaml, schema, field);
+      assert.ok(allowed?.includes(value), `${schema}.${field} 不再接受 "${value}"（现为 [${allowed}]）`);
+    }
+  });
+
+  test("合同里带 maxLength 的字段，技能必须写明该约束", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    const limits = schemaMaxLengths(yaml, "CreateRoomRequest");
+    assert.ok(Object.keys(limits).length > 0, "CreateRoomRequest 不再声明 maxLength？确认合同变更");
+    for (const [field, limit] of Object.entries(limits)) {
+      // 必须是「字段名 + 上限数字」同现，光在别处出现过这个数字不算数。
+      const stated = allSkillText
+        .split("\n")
+        .some((line) => line.includes(field) && new RegExp(`\\b${limit}\\b`).test(line));
+      assert.ok(stated, `Room.${field} 的 maxLength=${limit} 没在任何技能里与字段名同现——中文蓝图会撞 422`);
+    }
+  });
+
+  test("本地 VERSION 不得低于线上发布版本", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    const local = readFileSync(join(skillsRoot, "workflow-update/VERSION"), "utf8").trim();
+    const compare = (a, b) => {
+      const pa = a.split(".").map(Number);
+      const pb = b.split(".").map(Number);
+      for (let i = 0; i < 3; i += 1) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+      return 0;
+    };
+    assert.ok(
+      compare(local, onlineVersion) >= 0,
+      `本地 VERSION=${local} 低于线上 ${onlineVersion}：仓库落后于已发布版本`,
+    );
+    if (compare(local, onlineVersion) > 0) {
+      t.diagnostic(`提醒：仓库 ${local} 领先线上 ${onlineVersion}，手动/Codex 安装用户还拿不到`);
+    }
+  });
+});
+
+// 这几条不依赖网络：属于「已经踩过一次，不许再踩」的不变量。
+describe("离线不变量", () => {
+  test("技能里不得再出现写死的 status 值", () => {
+    const offenders = [];
+    for (const file of skillFiles) {
+      for (const [index, line] of file.text.split("\n").entries()) {
+        // 允许说明性文字提到 todo，但不允许出现在 JSON/赋值位置
+        if (/["']status["']\s*:\s*["'][a-z_]+["']/.test(line) || /\bstatus\s*=\s*["'][a-z_]+["']/.test(line)) {
+          offenders.push(`${file.path}:${index + 1}  ${line.trim()}`);
+        }
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      `建单时不得显式传 status——项目可配自定义工作流，写死的值会 422：\n${offenders.join("\n")}`,
+    );
+  });
+
+  test("凭证解析片段有且只有一份", () => {
+    const owners = skillFiles
+      .filter((file) => /export WORKFLOW_API_BASE=/.test(file.text))
+      .map((file) => file.path);
+    assert.deepEqual(owners, ["plugins/workflow/skills/workflow-ops/references/connection.md"]);
+  });
+
+  test("技能包只含 Markdown 与 VERSION，且不含疑似凭据", () => {
+    for (const file of listFiles(skillsRoot)) {
+      const display = relative(repoRoot, file);
+      assert.ok(
+        extname(file) === ".md" || file.endsWith("VERSION"),
+        `${display} 不是 Markdown 或 VERSION——技能包不允许可执行文件`,
+      );
+      assert.doesNotMatch(readFileSync(file, "utf8"), /wfp_[0-9a-zA-Z]{12,}/, `${display} 含疑似真实 token`);
+    }
+  });
+
+  test("插件清单齐备", () => {
+    for (const required of [
+      ".claude-plugin/marketplace.json",
+      "plugins/workflow/.claude-plugin/plugin.json",
+      "CHANGELOG.md",
+      "package.json",
+    ]) {
+      assert.ok(existsSync(join(repoRoot, required)), `缺少 ${required}`);
+    }
+  });
+});

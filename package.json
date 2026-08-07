@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Agent plugin for Workflow (workflow.games) — 技能包与契约测试",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:contract": "node --test tests/contract/*.test.mjs",
+    "test:all": "npm test && npm run test:contract"
   },
   "engines": {
     "node": ">=20"

@@ -5,24 +5,42 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # 每周一 03:00 UTC 跑一次合同一致性——平台改了合同要提前收到红灯，
+    # 而不是等用户撞 422。
+    - cron: '0 3 * * 1'
 
 jobs:
   test:
+    name: 结构与提示词契约
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 技能包契约测试
-        run: npm test
+      - run: npm test
 
-  # 三个 JSON 清单里的版本必须与 VERSION 一致，避免发布出半截版本。
-  version-consistency:
+  contract:
+    name: 线上 OpenAPI 合同一致性
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 核对 VERSION / plugin.json / package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # 抓不到线上合同时测试内部会 skip，不会把网络抖动算成失败。
+      - run: npm run test:contract
+
+  version-consistency:
+    name: 版本一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 核对 VERSION / plugin.json / package.json / CHANGELOG
         run: |
           V=$(tr -d '[:space:]' < plugins/workflow/skills/workflow-update/VERSION)
           P=$(node -p "require('./plugins/workflow/.claude-plugin/plugin.json').version")
