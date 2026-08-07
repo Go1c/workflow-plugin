@@ -44,7 +44,7 @@ description: 把模糊想法、长文、附件或讨论结果澄清为可执行�
 
 ## 4. 生成可审查蓝图
 
-生成前完整读取 [requirement-template.md](references/requirement-template.md) 和 [discipline-overlays.md](references/discipline-overlays.md)，只把与本需求相关的覆盖层合并进模板。
+生成前完整读取 [requirement-template.md](references/requirement-template.md)。再读 [discipline-overlays.md](references/discipline-overlays.md) 的选择表，为每张可执行卡判定**单一主覆盖层**，然后**只读该覆盖层自己的文件**并合并进模板——不要通读全部覆盖层，无关角色定义会让卡片串味。
 
 蓝图必须包含：
 
