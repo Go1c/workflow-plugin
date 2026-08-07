@@ -1,0 +1,13 @@
+{
+  "name": "workflow-plugin",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent plugin for Workflow (workflow.games) — 技能包与契约测试",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

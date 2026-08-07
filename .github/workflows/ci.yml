@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 技能包契约测试
+        run: npm test
+
+  # 三个 JSON 清单里的版本必须与 VERSION 一致，避免发布出半截版本。
+  version-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核对 VERSION / plugin.json / package.json
+        run: |
+          V=$(tr -d '[:space:]' < plugins/workflow/skills/workflow-update/VERSION)
+          P=$(node -p "require('./plugins/workflow/.claude-plugin/plugin.json').version")
+          K=$(node -p "require('./package.json').version")
+          echo "VERSION=$V plugin.json=$P package.json=$K"
+          [ "$V" = "$P" ] && [ "$V" = "$K" ] || { echo "::error::版本号不一致"; exit 1; }
+          grep -q "## \[$V\]" CHANGELOG.md || { echo "::error::CHANGELOG.md 缺少 $V 的条目"; exit 1; }
