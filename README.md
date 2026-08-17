@@ -4,7 +4,7 @@
 
 ### 你的 AI 会写代码，但它不会替你管项目。<br/>现在会了。
 
-**把 Claude Code / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转，全部由 Agent 自己落单。**
+**把 Claude Code / Cursor / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转、线上验收，全部由 Agent 自己跑完。**
 
 ![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
@@ -150,6 +150,10 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 
 网络断了、5xx 了 —— 先查是否已落库，确认没有才重发。已成功的对象绝不重建，只补缺失的子资源。**杜绝重复建单。**
 
+**🧪 验收结论不拿代码当证据**
+
+线上验收只认线上实测。读代码、看提交记录、旧截图、接口返回 200 —— **一律不算证据**；本地和 dev 跑通了也不能冒充线上结论。证据不够就判「阻塞」告诉你缺什么，**不会编一个"应该修好了"**。
+
 </td><td width="50%" valign="top">
 
 **🎯 绝不写错项目**
@@ -164,10 +168,16 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 
 平台自定义的工作流状态、验收类型、缺陷自定义字段一律**现查**，查不到就留空并告诉你 —— **不猜一个值填进去**。
 
+**🚧 不为了截图动生产数据**
+
+复现要动测试账号自身数据之外的业务数据，或会触发真实扣费、删除、注销 —— **先说明影响与恢复方式并另取授权**，未获授权判「阻塞」。原始反馈也一字不改：QA 结论只以描述末尾的 QA 块、新评论、新附件三种方式追加。
+
 </td></tr>
 </table>
 
-> 还有一条边界写死在提示词里：**落单不等于开工。** Agent 只创建你授权的 PM 对象和结构化验收项，不建 WorkItem、不流转状态、不创建 Worktree、不跑你仓库的测试、不动一行代码。
+> 还有一条边界写死在提示词里：**落单不等于开工。** 规划与落单时，Agent 只创建你授权的 PM 对象和结构化验收项，不建 WorkItem、不流转状态、不创建 Worktree、不跑你仓库的测试、不动一行代码。
+>
+> **唯一的例外是 `workflow-qa`** —— 它被授权跑测并按判定流转状态，但例外只覆盖这两件事：改代码、改资产、建分支、部署、修 bug 一律仍然禁止。**QA 不下场修**，发现问题就回写证据交给实现方。
 
 ---
 
@@ -184,6 +194,21 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 
 首次在某个项目目录接入时，`workflow-setup` 会引导你建 token 并写好 `.workflow`。
 
+用 `workflow-qa` 做线上验收时，`.workflow` 可以再加一个**可选**的 `[qa]` 表，声明受测线上地址、入口路径，以及测试账号凭据的**环境变量名**：
+
+```toml
+profile = "my-project"
+
+[qa]
+base_url = "https://<受测线上站点>"
+entry_path = "/login"
+username_env = "QA_USER"
+password_env = "QA_PASS"
+surfaces = ["web"]
+```
+
+**只写变量名，不写账号密码本身** —— 这个文件是要提交进版本库给全队共享的。`[qa]` 缺失时 QA 技能会停下来问你，**不猜受测地址**；`config.toml` 的格式一个键都没加，`[qa]` 只属于 `.workflow`。
+
 ---
 
 ## 更新
@@ -191,6 +216,7 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 | 安装方式 | 怎么更新 |
 | :-- | :-- |
 | Claude Code（marketplace） | 支持 autoUpdate 自动升级，也可在 `/plugin` 界面手动更新 |
+| Agent Plugins 客户端 | 重跑一次 `npx plugins add Go1c/workflow-plugin` |
 | Codex / 手动安装 | 对 Agent 说「更新 workflow 插件」—— 查线上版本 → 逐文件校验 sha256 → 备份旧版 → 就位 |
 
 自更新只从 `workflow.games` 域下载，技能包只允许 `.md` 与 `VERSION` 纯文本 —— **清单里出现任何可执行文件，立即中止并告警。**
