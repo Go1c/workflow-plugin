@@ -6,7 +6,7 @@
 
 **把 Claude Code / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转，全部由 Agent 自己落单。**
 
-![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-5-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
+![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
 </div>
 
@@ -47,6 +47,7 @@ Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都�
 | 🔌 `workflow-setup` | 从零接入：注册引导 → 建 token → 写配置 → 验证连接 → 401/403 现场分诊 |
 | 🧠 `workflow-planning` | **把一句话变成一套能直接派活的开发蓝图** —— 判定单需求还是需求室、拆交付轨道、排并行 wave、写验收 |
 | ⚡ `workflow-ops` | 干活：建需求、记 bug（自带查重）、查任务、指派、流转、评论、附件 |
+| 🧪 `workflow-qa` | **在真实线上环境跑测验收** —— 复现 bug、复测修复、判定、回写证据与状态，**不读代码下结论** |
 | 📖 `workflow-docs` | 答疑：现抓线上文档和 OpenAPI 合同回答，**不凭记忆瞎编** |
 | 🔄 `workflow-update` | 自检版本、校验 sha256、安全自更新 |
 
@@ -79,7 +80,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 没有账号也不要紧 —— 装完直接对 Agent 说 **「接入 Workflow」**，`workflow-setup` 一步步带你走完注册、建 token、写配置、验证连接。
 
-装好即得四个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:update`。
+装好即得五个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:qa <单号>`、`/workflow:update`。
 
 ---
 
@@ -113,6 +114,20 @@ Agent 会先读你的输入、仓库里的 `AGENTS.md` / `CLAUDE.md` / 设计文
 建单前先 `GET /search` 查重 → 撞上疑似重复**先报给你**（不默默建第二张）→ 建单 → `GET` 读回 → 汇报 `displayKey` + UUID + 可点链接 + 实际落库的字段值。
 
 **「记一下」就只记录** —— 不提修复方案、不扩写成开发任务、不擅自开始改代码。
+
+### 🧪 真的去线上跑一遍，再决定这单怎么处置
+
+```
+/workflow:qa B-00087
+```
+
+Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然后**在你声明的线上环境实际操作**：原路径至少跑两遍（当前会话 + 干净重入），每个关键步骤截图，首次没复现就换浏览器 / 语言 / 视口 / 账号状态做变体重试。
+
+判定只有六个：**属实 / 部分属实 / 已修复 / 未复现 / 重复 / 阻塞**。然后追加证据附件、在描述末尾写进 QA 记录块（原文一字不动）、发结构化评论、现查 transitions 后流转状态。
+
+> **「结论只来自线上实测」是写死在提示词里的第一条。** 读代码、看提交记录、旧截图、接口响应 —— 一律不算验收证据。本地和 dev 跑通了也不能冒充线上结论；证据不够就判「阻塞」告诉你缺什么，**不会给你一个猜出来的"应该修好了"**。
+>
+> 另外两条：**「未复现」不等于「不存在」** —— 变体没试完不许写，要按 `cannot_reproduce` 关单必须再问你一次。**QA 不下场修** —— 发现问题就回写证据交给实现方，不改一行代码。
 
 ---
 

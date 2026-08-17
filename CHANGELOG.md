@@ -4,6 +4,17 @@
 
 ## [0.4.0]
 
+### 新增
+
+- **新增 `workflow-qa` 技能：在真实线上环境跑测与验收。** 复现 / 复测 / 验收一张单，给出判定，把证据与结论回写原单并按结论流转状态。规则从两个内部项目已在用的线上验收流程提炼合并而来，脱敏后通用化。要点：
+  - **结论只来自线上实测**——读代码、看提交记录、旧截图、接口响应都不算验收证据，本地与 dev 表现不得冒充线上结论。
+  - **7 条 QA 硬闸门 Q1–Q7**（`workflow-qa/references/qa-gates.md`）：环境锁定、一次一单、证据先于判定、凭据只走环境变量、生产数据边界、不覆盖原始反馈、「未复现」不等于「不存在」。与落单闸门一样内联进 SKILL.md 并由测试锁死逐字一致。
+  - **六判定**（属实 / 部分属实 / 已修复 / 未复现 / 重复 / 阻塞）各自绑定明确的状态处理；`resolution` 只用 `fixed` / `duplicate` / `cannot_reproduce`，`wontfix` 是产品决策不由 QA 判定。
+  - **原路径至少跑两遍并记录复现率**，首次未复现必须做变体重试并逐条记录——一次没复现就写「未复现」是把真 bug 关掉的最常见方式。
+  - 明确 QA 是落单闸门 **G5 的授权例外**，但例外只覆盖「跑测」与「按判定流转」：改代码、改资产、建分支、部署、修 bug 一律仍然禁止。
+- **新增 `/workflow:qa <单号>` 命令**，预设「只跑测和验收，不改代码、不擅自关单」的边界。
+- **`.workflow` 新增可选 `[qa]` 表**：声明受测线上地址、入口路径、受测面与凭据的**环境变量名**（不含凭据本身，可提交给全队共享）。顶层仍只有 `profile` 一个键，现有凭证解析不受影响；`[qa]` 缺失时 QA 技能停下问用户，不猜地址。`~/.config/workflow/config.toml` 的格式硬合同保持不变，一个键都没加。
+
 ### 修复
 
 - **不再硬编码 `status`**。建 bug / 建需求时不显式传 `status`，由项目绑定的工作流落初始态。原先写死的 `"status":"todo"` 在改过初始态名的项目上会被后端的合法状态集校验拒绝（422），而 `workflow-ops` 自己的规则本就写着「不硬写 status」。
@@ -36,6 +47,8 @@
 - 新增 `package.json`（`npm test`）与 GitHub Actions CI；此前测试从未在 CI 跑过，且 `node --test tests/` 会因目录解析报 `MODULE_NOT_FOUND`。
 - CI 增加版本一致性检查：`VERSION` / `plugin.json` / `package.json` 三者相同，且 `CHANGELOG.md` 有对应条目。
 - **新增 `tests/agent-plugins-conformance.test.mjs`**：根 `plugin.json` 的 `$schema` 是 1.0.0 标识符原文、`name` 过 §5.5 全部命名约束、**顶层字段封闭**（多一个键就是违规，而客户端只会静默拒载不会报错）、`author` 只含 name/email/url、声明 `license` 必须有 `LICENSE` 文件、`skills/` 每个直接子目录都有 `SKILL.md` 且 frontmatter `name` 与目录名一致（客户端不递归找更深的 SKILL.md，名字对不上就是加载不到）、两份清单同名同版本、`source` 为 `"./"`。版本一致性从三方扩到四方。
+- **新增 `tests/workflow-qa-contract.test.mjs`**：Q1–Q7 闸门块逐字一致、六判定齐全、`resolution` 三值且排除 `wontfix`、description 的 QA 块成对标记且整块替换、`expectedUpdatedAt` 并发校验与 409 不硬覆盖、`resolution` 先流转终态的时序约束、变体重试与复现率、凭据只走环境变量。
+- **脱敏断言从规划技能扩展到全部技能与命令**：内部项目名 / 内部路径 / 疑似凭据的黑名单，外加**主机名白名单**（只允许 `workflow.games` 及其子域）——两个原型来自内部仓库、写死了内部线上地址，白名单能挡下任何没预想到的域名泄漏。
 - **新增 L2 合同一致性测试**（`tests/contract/`，`npm run test:contract`）：以线上 OpenAPI 为真值，检查技能里出现的每个 API 路径都存在于合同、`bug-fields` 表里写的枚举值都在合同 enum 内、合同声明了 `maxLength` 的字段技能里必须写明、本地 `VERSION` 不低于线上发布版本；另含离线不变量（不得写死 `status`、凭证片段只此一份、技能包只含文本、清单齐备）。网络不可达时 skip 而非 fail。CI 每周一定时跑一次——平台改合同时提前收到红灯，而不是等用户撞 422。
 
 ## [0.3.0]

@@ -8,6 +8,7 @@
 2. **`.workflow` 标记**：从当前目录向上逐级找，取最近的一个，到含 `.git` 的目录或文件系统根为止；按其 `profile` 名到 `~/.config/workflow/config.toml` 的 `[profiles.<名>]` 取 `base_url` 与 `token`。
    - 该 profile 在 config 里不存在 → 走 workflow-setup 的建 token 分支为这个项目补一枚。
    - **文件存在但解析不出 profile 名**（写了行内注释、用了单引号、键名拼错）→ **停止并报错**，绝不回落第 3 级。标记文件在场却被忽略，等于静默写进另一个项目。
+   - 文件顶层**只有 `profile` 一个键**；`[qa]` 表是 workflow-qa 用的可选段，按 TOML 规则必在顶层键之后，因此下面的解析片段取到的仍是顶层 `profile`。本文件的凭证解析**不读 `[qa]`**，`[qa]` 里也不允许出现任何凭据。
 3. **全局 `current_profile` 兜底**，硬条件：config 里 profile 多于一个且当前目录没有 `.workflow` 时**不得静默使用**——必须先问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续；只有单 profile 时可直接用。
 
 **规范化 API 根地址**：环境变量已带 `/api/v1`；config 里的 `base_url` 是站点根，读取后只追加一次。出现重复后缀或非 HTTPS 项目 Host 就停止分诊，不猜测修剪。
