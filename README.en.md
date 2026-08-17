@@ -1,0 +1,234 @@
+<div align="center">
+
+# Workflow Agent Plugin
+
+### Your AI writes code. It just doesn't manage your project.<br/>Now it does.
+
+**Connect Claude Code, Cursor, and Codex to [Workflow](https://workflow.games) — requirements, bugs, tasks, status transitions, and live QA, all driven by your coding agent.**
+
+![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
+
+[简体中文](./README.md) · **English**
+
+</div>
+
+---
+
+## What is the Workflow Agent Plugin?
+
+**The Workflow Agent Plugin connects AI coding agents — Claude Code, Cursor, and Codex — directly to [Workflow](https://workflow.games) (workflow.games), a project management platform for game development teams.** Once installed, the agent turns a one-line request into an executable delivery blueprint and files it, reports bugs with automatic deduplication, runs QA against your real production environment, and moves ticket status based on the verdict — and **every write must be verified by reading it back** before the agent is allowed to claim success.
+
+The plugin ships 6 skills, 5 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 45 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
+
+---
+
+## What problem does this solve?
+
+**Your agent ships code, and your tracker stays empty.** It rewrites three modules in ten minutes, and nobody filed a ticket. Requirements go unrecorded, bugs go unlogged, status never moves — the AI does the work and you do the paperwork.
+
+**Letting an AI touch your tracker API is genuinely risky.** Left unconstrained, an agent will invent fields that don't exist, file the same bug three times, leak a token into a log, or create 17 tickets in the wrong project the moment you say "sounds good."
+
+**"Plan this feature for me" returns a chat log, not a plan.** Close the window and it's gone. Hand it to another agent and it can't act on it. A plan that can't be executed isn't a plan.
+
+This plugin exists for all three. **It is not an "let the AI call the API" switch — it is the discipline that makes doing so survivable.**
+
+---
+
+## What does each skill do?
+
+| Skill | What it does |
+| :-- | :-- |
+| `workflow-setup` | Onboarding: registration walkthrough, API token creation, config write, connection verification, on-the-spot 401/403 triage |
+| `workflow-planning` | **Turns one sentence into an executable delivery blueprint** — decides single requirement vs. requirement room, splits delivery tracks, schedules parallel waves, writes acceptance criteria |
+| `workflow-ops` | Execution: create requirements, file bugs (with dedup), query tasks, assign, transition, comment, attach |
+| `workflow-qa` | **Runs QA in your real production environment** — reproduces bugs, retests fixes, issues a verdict, writes evidence and status back to the ticket. **Never concludes from source code.** |
+| `workflow-docs` | Answers questions by fetching live docs and the OpenAPI contract — **never from memory** |
+| `workflow-update` | Version self-check, sha256 verification, safe self-update |
+
+---
+
+## How do I install it?
+
+This repository is simultaneously an **[Agent Plugins 1.0.0](https://agent-plugins.org/)** package and a Claude Code marketplace — the repository root is the plugin root, so both ecosystems install it directly.
+
+**Agent Plugins clients** (Cursor, Codex, Copilot, VS Code, Kiro, …)
+
+```bash
+npx plugins add Go1c/workflow-plugin
+```
+
+**Claude Code**
+
+```bash
+/plugin marketplace add Go1c/workflow-plugin
+/plugin install workflow@workflow-plugin
+```
+
+**Codex / manual install**
+
+```bash
+curl -fsSL https://workflow.games/plugin/install.sh | bash
+```
+
+> Installs to `~/.codex/skills` by default; use `--target ~/.claude/skills` or `--target .agents/skills` for a project-level install.
+
+No account yet? Just tell the agent **"connect me to Workflow"** — `workflow-setup` walks you through registration, token creation, config, and verification.
+
+You get five commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:qa <ticket>`, `/workflow:update`.
+
+---
+
+## What does it look like in practice?
+
+### One sentence to an executable blueprint
+
+```
+/workflow:plan the battle results screen should show score and drops
+```
+
+The agent reads your input, your repo's `AGENTS.md` / `CLAUDE.md`, design docs, and existing implementation. It **asks one question at a time, and only questions that would actually change the blueprint**. Then it decides the shape: one Requirement if a single agent can deliver and verify it independently, or a Requirement Room if the work splits across client, server, art, and tooling with research gates, parallel waves, and shared contracts.
+
+The point is this: **every executable requirement is a self-contained agent prompt.** Identity, source-of-truth priority, prerequisites, decision authority, owned scope and shared hotspots, detailed requirements, verification evidence, deliverables, acceptance criteria, prohibitions, escalation, and hand-back format — twelve sections, all filled in. It does not depend on the original conversation, so you can hand it to a different agent three days later, or to a new hire, and it still runs.
+
+### File a bug, get dedup for free
+
+```
+/workflow:bug the results page shows the raw owner id instead of the name
+```
+
+The agent runs `GET /search` first, reports suspected duplicates **before** creating anything, then files the ticket, reads it back with `GET`, and reports the `displayKey`, UUID, clickable link, and the field values that actually landed in the database.
+
+**"Just log it" means only log it** — no fix proposals, no expansion into dev tasks, no touching code.
+
+### Actually test it in production before deciding the ticket's fate
+
+```
+/workflow:qa B-00087
+```
+
+The agent reads the ticket, **looks at every screenshot attachment** to establish a reproduction baseline, then **operates your declared production environment for real**: it runs the original path at least twice (current session plus a clean re-entry), screenshots every key step, and if it doesn't reproduce the first time it retries across browser, language, viewport, and account-state variants.
+
+There are exactly six verdicts: **confirmed, partially confirmed, fixed, not reproduced, duplicate, blocked.** The agent then attaches evidence, appends a QA record block to the description (leaving the original text untouched), posts a structured comment, and transitions status after querying available transitions live.
+
+> **"Conclusions come only from live testing" is the first rule in the prompt.** Reading source code, checking commit history, old screenshots, a 200 response — none of these count as acceptance evidence. Passing locally or on dev cannot stand in for a production conclusion. If evidence is insufficient, the verdict is "blocked" and the agent tells you what's missing, rather than handing you a guessed "should be fixed now."
+
+---
+
+## Why is it safe to let this write to your production tracker?
+
+This is where most of the engineering went.
+
+**Two-gate authorization.** Approving blueprint content and authorizing a production write are two separate gates. Saying "looks good" only approves content. To actually file, the agent must first show the target project, blueprint revision, dedup results, and the **exact object count**, then ask explicitly whether to write. Any change in scope voids the authorization immediately.
+
+**Read-back is mandatory.** Every POST/PATCH is followed by a forced `GET`. **Without read-back evidence, the agent may not say "created."** Partial success is reported as partial success, listing exactly what landed and what didn't.
+
+**Idempotent recovery.** On a dropped connection or 5xx, the agent checks whether the object already exists before retrying. Objects that succeeded are never recreated — only missing sub-resources are filled in. No duplicate tickets.
+
+**It cannot write to the wrong project.** Before any write, the agent cross-checks `project.subdomainPrefix`, the actual API host, and the profile bound in `.workflow`. Mismatch means **stop**. A `.workflow` file that exists but won't parse also means **stop** — it never silently falls back to the global default project.
+
+**Tokens never leak.** Credentials travel only through environment variables, never as command-line plaintext. Every output — reports, logs, errors — refers to a token only as `wfp_` plus its first 8 characters.
+
+**Fields come from the contract, not from memory.** Platform-specific workflow states, acceptance types, and custom bug fields are always queried live. If a value can't be found, the agent leaves it blank and tells you — **it does not guess a value and write it**.
+
+**QA verdicts never come from code.** Live acceptance accepts only live evidence, and QA never modifies production business data for the sake of a screenshot: anything involving real charges, deletion, or account closure requires separate authorization.
+
+> One more boundary is hard-coded: **filing is not starting work.** During planning and filing, the agent creates only the PM objects and acceptance items you authorized — no work items, no status transitions, no worktrees, no running your repo's tests, no code changes.
+>
+> **`workflow-qa` is the sole exception** — it is authorized to test and to transition status on its verdict. The exception covers only those two things: changing code, changing assets, creating branches, deploying, and fixing bugs all remain forbidden. **QA does not fix.**
+
+---
+
+## How do I use one machine with multiple projects?
+
+Install the plugin once, globally. There is no need to reinstall per project.
+
+```
+~/.config/workflow/config.toml     one [profiles.<name>] section per project, each with its own token
+<your repo>/.workflow              profile = "<name>", no token, safe to commit and share
+```
+
+Credentials resolve in three tiers: **environment variables → the `.workflow` marker → the global `current_profile`**. **Whichever directory you work in determines which project you're connected to** — no manual switching. If your config has multiple profiles and the current directory isn't bound to one, the agent stops and asks rather than guessing.
+
+For live QA, `.workflow` can carry an **optional** `[qa]` table declaring the environment under test and the **environment variable names** holding test credentials:
+
+```toml
+profile = "my-project"
+
+[qa]
+base_url = "https://<your production site>"
+entry_path = "/login"
+username_env = "QA_USER"
+password_env = "QA_PASS"
+surfaces = ["web"]
+```
+
+**Only variable names, never the username or password itself** — this file is meant to be committed. If `[qa]` is absent, the QA skill stops and asks; it never guesses the environment under test.
+
+---
+
+## How do I update it?
+
+| Install method | How to update |
+| :-- | :-- |
+| Claude Code (marketplace) | Supports autoUpdate, or update manually from the `/plugin` UI |
+| Agent Plugins client | Re-run `npx plugins add Go1c/workflow-plugin` |
+| Codex / manual | Tell the agent "update the workflow plugin" — checks the published version, verifies sha256 per file, backs up the old version, installs |
+
+Self-update downloads only from the `workflow.games` domain, and the skill package may contain only `.md` and `VERSION` plain-text files — **any executable in the manifest aborts the update with a warning.**
+
+---
+
+## FAQ
+
+### Which AI coding tools does the Workflow Agent Plugin support?
+
+Claude Code, Cursor, and Codex, plus any client implementing the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification (Copilot, VS Code, Kiro, and others). Claude Code installs via marketplace, Agent Plugins clients via `npx plugins add Go1c/workflow-plugin`, and Codex via the install script.
+
+### How is this different from an MCP server?
+
+The Workflow Agent Plugin is a **skill package, not an MCP server**. It runs no persistent process and consumes no tool slots. It is a set of Markdown prompts the agent reads on demand, then calls the Workflow REST API using its own HTTP capability. The tradeoff is that your agent needs network access; the benefit is zero runtime dependencies and fully auditable behavior — you can read exactly what constrains it.
+
+### Is it safe to let an AI write to a production project tracker?
+
+The plugin constrains writes with 14 hard gates. Before writing, it verifies that `project.subdomainPrefix`, the live API host, and the profile bound in `.workflow` all agree, and stops if they don't. Every POST/PATCH is followed by a mandatory `GET` read-back, and **without read-back evidence the agent may not claim success**. Tokens travel only in environment variables and appear in output only as `wfp_` plus 8 characters.
+
+### Do I need a Workflow account before installing?
+
+No. After installing, tell your agent "connect me to Workflow" and the `workflow-setup` skill walks you through registration, creating a project API token, writing the config, and verifying the connection — including live triage if you hit a 401 or 403.
+
+### Does workflow-qa really test in production, or does it infer from code?
+
+It operates the production environment for real. The first rule of `workflow-qa` is that **conclusions come only from live testing** — source code, commit history, old screenshots, and a 200 API response are explicitly not acceptance evidence. It runs the original path at least twice, records a reproduction rate, and must attempt variant retries before it may report "not reproduced."
+
+### What is the relationship between Workflow and Jira or Linear?
+
+[Workflow](https://workflow.games) is an AI-native development collaboration platform for game teams, covering requirements, bugs, scheduling, and traceability in one system. This repository is its AI agent integration layer. It **does not integrate with Jira or Linear**.
+
+### Is the plugin open source, and under what license?
+
+Yes — MIT licensed, source at [github.com/Go1c/workflow-plugin](https://github.com/Go1c/workflow-plugin). The skill package is restricted to Markdown and `VERSION` plain-text files, and the self-updater aborts if any executable appears in the manifest.
+
+---
+
+## Prefer not to run an install script?
+
+Send this to your AI agent verbatim — the effect is identical:
+
+```
+Please install the Workflow (workflow.games) agent plugin for me:
+1. Fetch https://workflow.games/plugin/version.json?cb=<current timestamp> and read the version and files fields;
+2. Fetch the manifest that files points to (with the same cb parameter), download each file listed and verify its sha256; stop and tell me if any mismatch;
+3. Write the skill directories under skills/ into ~/.codex/skills/ (or ~/.claude/skills/ for a Claude Code manual install, or .agents/skills/ for a project-level install). The skill package should contain only Markdown and VERSION text files — stop immediately if you find an executable;
+4. List the installed skills and versions;
+5. Then start the workflow-setup onboarding flow: first check whether ~/.config/workflow/config.toml already has a usable configuration.
+```
+
+---
+
+<div align="center">
+
+**Full installation and usage guide → [workflow.games/wiki/guides/agent-plugin](https://workflow.games/wiki/guides/agent-plugin)**
+
+*Let the AI finish the work — and file the ticket too.*
+
+</div>

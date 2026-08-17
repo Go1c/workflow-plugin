@@ -8,7 +8,17 @@
 
 ![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
+**简体中文** · [English](./README.en.md)
+
 </div>
+
+---
+
+## 这是什么
+
+**Workflow Agent 插件把 Claude Code、Cursor、Codex 等 AI 编码 Agent 直接接入 [Workflow](https://workflow.games)（workflow.games）项目管理平台。** 装好之后，AI Agent 能把一句话需求拆成可执行的开发蓝图并落单、带查重地记录缺陷、在真实线上环境跑测验收，并按判定流转工单状态 —— 且**每一次写入都必须读回验证**才允许声称成功。
+
+插件包含 6 个技能、5 个斜杠命令、14 条硬闸门（G1–G7 落单闸门与 Q1–Q7 QA 闸门），45 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
 
 ---
 
@@ -235,6 +245,42 @@ surfaces = ["web"]
 4. 列出安装的技能与版本；
 5. 然后直接开始 workflow-setup 技能的接入流程：先检测本机 ~/.config/workflow/config.toml 是否已有可用配置。
 ```
+
+---
+
+## 常见问题
+
+### Workflow Agent 插件支持哪些 AI 编码工具？
+
+支持 Claude Code、Cursor、Codex，以及任何实现 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范的客户端（Copilot、VS Code、Kiro 等）。Claude Code 走 marketplace 安装；Agent Plugins 客户端用 `npx plugins add Go1c/workflow-plugin`；Codex 与手动安装走安装脚本。
+
+### 这个插件和 MCP server 有什么区别？
+
+Workflow Agent 插件是**技能包（skills），不是 MCP server**。插件不常驻进程、不占用 Agent 的工具槽位，本体是一组 Markdown 提示词，Agent 按需读取后用自己的 HTTP 能力直接调用 Workflow REST API。代价是需要 Agent 具备联网能力，收益是零运行时依赖、行为完全可审计 —— 你能直接读到它被约束了什么。
+
+### 让 AI 直接写线上项目管理数据，安全吗？
+
+插件用 14 条硬闸门约束写操作。写入前强制核对 `project.subdomainPrefix`、实际 API Host、`.workflow` 绑定的 profile 三方一致，对不上就停；每个 POST/PATCH 之后强制 `GET` 读回，**没有读回证据不许说「已创建」**；token 只走环境变量，任何输出里只以 `wfp_` + 前 8 位指代。
+
+### 使用这个插件需要先有 Workflow 账号吗？
+
+不需要。装完直接对 Agent 说「接入 Workflow」，`workflow-setup` 技能会引导你完成注册、创建项目 API Token、写入配置、验证连接，并在遇到 401 / 403 时现场分诊。
+
+### workflow-qa 是真的去线上点，还是读代码猜结论？
+
+真的在线上环境实际操作。`workflow-qa` 的头号纪律是**结论只来自线上实测** —— 读代码、看提交记录、旧截图、接口返回 200 一律不算验收证据。原路径至少跑两遍并记录复现率，首次未复现必须做变体重试。判定只有六个：属实、部分属实、已修复、未复现、重复、阻塞。
+
+### 一台机器上接多个项目怎么办？
+
+插件全局装一份即可，不必按项目重复安装。`~/.config/workflow/config.toml` 每个项目一节 `[profiles.<名>]` 各放各的 token，项目仓库根放一个 `.workflow` 文件声明绑定哪个 profile。凭证按**环境变量 → `.workflow` 标记 → 全局 `current_profile`** 三级解析，人在哪个目录干活就连哪个项目。
+
+### Workflow 和 Jira、Linear 这类工具是什么关系？
+
+[Workflow](https://workflow.games) 是面向游戏研发团队的 AI-native 研发协作平台，需求、缺陷、排期、追溯一体。本仓库是 Workflow 的 AI Agent 接入层，**不对接 Jira 或 Linear**。
+
+### 这个插件开源吗？用什么许可？
+
+开源，MIT 许可，源码在 [github.com/Go1c/workflow-plugin](https://github.com/Go1c/workflow-plugin)。技能包只允许包含 Markdown 与 `VERSION` 纯文本文件 —— 自更新时清单里出现任何可执行文件会立即中止并告警。
 
 ---
 
