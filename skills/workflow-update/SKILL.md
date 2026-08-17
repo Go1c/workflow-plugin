@@ -31,11 +31,11 @@ https://workflow.games/plugin/version.json?cb=<当前 epoch 秒>
 
 看本技能所在路径判断安装方式：
 
-**A. Claude marketplace 安装**（路径含 `plugins/`，或插件根目录存在 `.claude-plugin/`）：
+**A. 宿主托管安装**（路径在 `~/.claude/plugins/cache` 或其他客户端的插件缓存下，或从本技能目录向上两级即为插件根、其中存在 `plugin.json` 或 `.claude-plugin/plugin.json`）：
 
-提示用户用 `/plugin` 界面更新，或等 marketplace autoUpdate 自动升级。**本技能不自改插件目录**——marketplace 管理的目录由宿主维护，绕过它手改会造成状态不一致。
+提示用户按宿主自己的方式更新——Claude Code 用 `/plugin` 界面或等 marketplace autoUpdate；其他 Agent Plugins 客户端用各自的安装器（如 `npx plugins add` 重装）。**本技能不自改插件目录**——宿主管理的目录由宿主维护，绕过它手改会造成状态不一致。
 
-**B. 手动安装**（路径在 `~/.codex/skills`、`.agents/skills` 或 `~/.claude/skills` 下）→ 自更新，按第 4 节。
+**B. 手动安装**（技能目录直接落在 `~/.codex/skills`、`.agents/skills` 或 `~/.claude/skills` 下，同级没有插件清单）→ 自更新，按第 4 节。
 
 ## 4. 自更新流程（仅手动安装）
 

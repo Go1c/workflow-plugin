@@ -13,7 +13,7 @@ import { dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const skillsRoot = join(repoRoot, "plugins/workflow/skills");
+const skillsRoot = join(repoRoot, "skills");
 
 const OPENAPI_URL = "https://workflow.games/openapi/gameflow.v1.yaml";
 const VERSION_URL = "https://workflow.games/plugin/version.json";
@@ -239,7 +239,7 @@ describe("离线不变量", () => {
     const owners = skillFiles
       .filter((file) => /export WORKFLOW_API_BASE=/.test(file.text))
       .map((file) => file.path);
-    assert.deepEqual(owners, ["plugins/workflow/skills/workflow-ops/references/connection.md"]);
+    assert.deepEqual(owners, ["skills/workflow-ops/references/connection.md"]);
   });
 
   test("技能包只含 Markdown 与 VERSION，且不含疑似凭据", () => {
@@ -255,10 +255,12 @@ describe("离线不变量", () => {
 
   test("插件清单齐备", () => {
     for (const required of [
+      "plugin.json",
       ".claude-plugin/marketplace.json",
-      "plugins/workflow/.claude-plugin/plugin.json",
+      ".claude-plugin/plugin.json",
       "CHANGELOG.md",
       "package.json",
+      "LICENSE",
     ]) {
       assert.ok(existsSync(join(repoRoot, required)), `缺少 ${required}`);
     }

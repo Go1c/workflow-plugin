@@ -4,8 +4,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Agent Plugins 1.0.0：仓库根即插件根，skills/ 与 commands/ 都在根上。
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const pluginRoot = join(repoRoot, "plugins/workflow");
+const pluginRoot = repoRoot;
 const planningRoot = join(pluginRoot, "skills/workflow-planning");
 
 function read(relativePath) {
@@ -38,8 +39,8 @@ function listFiles(directory) {
   });
 }
 
-test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
-  const skill = read("plugins/workflow/skills/workflow-planning/SKILL.md");
+test("正确路由规划、单次操作与独立写入授权", () => {
+  const skill = read("skills/workflow-planning/SKILL.md");
   assert.match(skill, /^---\nname: workflow-planning\ndescription: [^\n]+\n---/);
   assert.match(skill, /规划、梳理或拆解/);
   assert.match(skill, /独立写入确认/);
@@ -48,24 +49,24 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
   assert.match(skill, /<!-- gates:start -->[\s\S]*不是写入授权[\s\S]*<!-- gates:end -->/);
   assert.match(skill, /用户只要求方案、PRD、拆解或提示词时.*停止/);
 
-  const command = read("plugins/workflow/commands/plan.md");
+  const command = read("commands/plan.md");
   assert.match(command, /蓝图内容确认不等于线上写入授权/);
   assert.match(command, /目标 Workflow 项目/);
   assert.match(command, /不流转需求状态/);
 
-  const ops = read("plugins/workflow/skills/workflow-ops/SKILL.md");
+  const ops = read("skills/workflow-ops/SKILL.md");
   assert.match(ops, /^---\nname: workflow-ops\ndescription: [^\n]*字段与内容已经明确[^\n]*workflow-planning[^\n]*\n---/);
   assert.match(ops, /\/me.*验证身份/);
   assert.match(ops, /\/projects\/current.*项目.*角色\/权限/);
   assert.doesNotMatch(ops, /`\/me` 返回的项目/);
 
-  const setup = read("plugins/workflow/skills/workflow-setup/SKILL.md");
+  const setup = read("skills/workflow-setup/SKILL.md");
   assert.match(setup, /\/me` 返回 200/);
   assert.match(setup, /\/projects\/current` 返回 200/);
   assert.match(setup, /project\.subdomainPrefix/);
   assert.doesNotMatch(setup, /`\/me` 返回的项目/);
 
-  const connection = read("plugins/workflow/skills/workflow-ops/references/connection.md");
+  const connection = read("skills/workflow-ops/references/connection.md");
   assert.match(connection, /\/me` \*\*只验证用户身份\*\*/);
   assert.match(connection, /\/projects\/current/);
   assert.doesNotMatch(connection, /grep -c[^\n]+\|\| echo 0/);
@@ -78,13 +79,12 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
     .filter((file) => /export WORKFLOW_API_BASE=/.test(readFileSync(file, "utf8")))
     .map((file) => relative(repoRoot, file));
   assert.deepEqual(ladderOwners, [
-    "plugins/workflow/skills/workflow-ops/references/connection.md",
+    "skills/workflow-ops/references/connection.md",
   ], `凭证解析片段应只存在于 connection.md，实际出现在：${ladderOwners.join(", ")}`);
 
-  const manifest = JSON.parse(read("plugins/workflow/.claude-plugin/plugin.json"));
-  assert.equal(manifest.version, "0.3.0");
+  // 版本号的四方一致性由 agent-plugins-conformance 统一断言，这里只锁描述口径。
+  const manifest = JSON.parse(read(".claude-plugin/plugin.json"));
   assert.match(manifest.description, /规划需求与需求室/);
-  assert.equal(read("plugins/workflow/skills/workflow-update/VERSION").trim(), manifest.version);
 
   const marketplace = JSON.parse(read(".claude-plugin/marketplace.json"));
   assert.match(marketplace.plugins[0].description, /规划需求与需求室/);
@@ -96,7 +96,7 @@ test("v0.3.0 正确路由规划、单次操作与独立写入授权", () => {
 });
 
 test("按独立交付拓扑拆单，并按变更类型选择质量路径", () => {
-  const skill = read("plugins/workflow/skills/workflow-planning/SKILL.md");
+  const skill = read("skills/workflow-planning/SKILL.md");
   assert.match(skill, /可独立交付、独立验证/);
   assert.match(skill, /客户端、服务端、工具链或构建发布/);
   assert.match(skill, /不得把超出单 Agent 上下文或验证边界的大任务压成“简单需求”/);
@@ -105,7 +105,7 @@ test("按独立交付拓扑拆单，并按变更类型选择质量路径", () =>
   assert.match(skill, /下游此时只生成条件化提纲.*不得落单/);
   assert.match(skill, /预研结束.*递增蓝图修订号.*重新取得写入授权/);
 
-  const process = read("plugins/workflow/skills/workflow-planning/references/planning-process.md");
+  const process = read("skills/workflow-planning/references/planning-process.md");
   assertHeadingsInOrder(process, [
     "需求定义与可选预研",
     "体验、内容与资产设计",
@@ -123,7 +123,7 @@ test("按独立交付拓扑拆单，并按变更类型选择质量路径", () =>
 });
 
 test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆盖层", () => {
-  const template = read("plugins/workflow/skills/workflow-planning/references/requirement-template.md");
+  const template = read("skills/workflow-planning/references/requirement-template.md");
   assertHeadingsInOrder(template, [
     "任务元数据",
     "你的身份",
@@ -147,7 +147,7 @@ test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆�
   assert.match(template, /与 Workflow 结构化验收项一一对应/);
 
   // 覆盖层是「索引 + 每层一个文件」：断言结构与可达性，不断言正文措辞。
-  const index = read("plugins/workflow/skills/workflow-planning/references/discipline-overlays.md");
+  const index = read("skills/workflow-planning/references/discipline-overlays.md");
   const indexDir = join(planningRoot, "references");
   const linked = new Map(
     [...index.matchAll(/\|\s*`(\[[^\]]+\])`\s*\|[^|]*\|\s*\[[^\]]+\]\((overlays\/[a-z-]+\.md)\)\s*\|/g)]
@@ -200,10 +200,10 @@ test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆�
 test("规划技能保持上下文预算：强制读取的文件不得无限膨胀", () => {
   // 每张卡实际加载 = SKILL.md + 流程 + 模板 + 覆盖层索引 + 一个覆盖层。
   const mandatory = [
-    "plugins/workflow/skills/workflow-planning/SKILL.md",
-    "plugins/workflow/skills/workflow-planning/references/planning-process.md",
-    "plugins/workflow/skills/workflow-planning/references/requirement-template.md",
-    "plugins/workflow/skills/workflow-planning/references/discipline-overlays.md",
+    "skills/workflow-planning/SKILL.md",
+    "skills/workflow-planning/references/planning-process.md",
+    "skills/workflow-planning/references/requirement-template.md",
+    "skills/workflow-planning/references/discipline-overlays.md",
   ].reduce((total, path) => total + Buffer.byteLength(read(path), "utf8"), 0);
 
   const overlayDir = join(planningRoot, "references/overlays");
@@ -219,7 +219,7 @@ test("规划技能保持上下文预算：强制读取的文件不得无限膨�
 });
 
 test("API 落单复用共享安全规则并读回原生验收项", () => {
-  const delivery = read("plugins/workflow/skills/workflow-planning/references/api-delivery.md");
+  const delivery = read("skills/workflow-planning/references/api-delivery.md");
   for (const token of [
     "../../workflow-ops/SKILL.md",
     "../../workflow-ops/references/call-templates.md",

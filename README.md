@@ -6,7 +6,7 @@
 
 **把 Claude Code / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转，全部由 Agent 自己落单。**
 
-![version](https://img.shields.io/badge/version-0.3.0-2ea44f) ![skills](https://img.shields.io/badge/skills-5-blue) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
+![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-5-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
 </div>
 
@@ -53,6 +53,14 @@ Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都�
 ---
 
 ## 30 秒装好
+
+本仓库同时是一个 **[Agent Plugins 1.0.0](https://agent-plugins.org/)** 插件包和一个 Claude Code marketplace —— 仓库根就是插件根，两边客户端都能直接装。
+
+**Agent Plugins 客户端**（Cursor / Codex / Copilot / VS Code / Kiro …）
+
+```bash
+npx plugins add Go1c/workflow-plugin
+```
 
 **Claude Code**
 

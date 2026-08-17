@@ -40,11 +40,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 核对 VERSION / plugin.json / package.json / CHANGELOG
+      - name: 核对 VERSION / 两份 plugin.json / package.json / CHANGELOG
         run: |
-          V=$(tr -d '[:space:]' < plugins/workflow/skills/workflow-update/VERSION)
-          P=$(node -p "require('./plugins/workflow/.claude-plugin/plugin.json').version")
+          V=$(tr -d '[:space:]' < skills/workflow-update/VERSION)
+          A=$(node -p "require('./plugin.json').version")
+          C=$(node -p "require('./.claude-plugin/plugin.json').version")
           K=$(node -p "require('./package.json').version")
-          echo "VERSION=$V plugin.json=$P package.json=$K"
-          [ "$V" = "$P" ] && [ "$V" = "$K" ] || { echo "::error::版本号不一致"; exit 1; }
+          echo "VERSION=$V plugin.json=$A .claude-plugin/plugin.json=$C package.json=$K"
+          [ "$V" = "$A" ] && [ "$V" = "$C" ] && [ "$V" = "$K" ] || { echo "::error::版本号不一致"; exit 1; }
           grep -q "## \[$V\]" CHANGELOG.md || { echo "::error::CHANGELOG.md 缺少 $V 的条目"; exit 1; }

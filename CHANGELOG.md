@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [0.4.0]
 
 ### 修复
 
@@ -19,6 +19,10 @@
 - **专业覆盖层改为索引 + 按需读取**。`discipline-overlays.md` 变成 18 行选择表，正文拆到 `references/overlays/*.md`；每张卡只读自己的主覆盖层。覆盖层部分单次加载 8966 → 4109 字节（-54%），也不再让 17 个不相关角色定义污染上下文。
 - **新增 `workflow-ops/references/connection.md`** 作为 setup / ops / docs / planning 共用的连接与真值单一真相源。凭证三级解析原本在三个文件里逐字重复，L1/L2/L3 阶梯重复两份。
 - **真值规则改为按漂移速度分层**。原先声称「不内嵌任何端点快照、每次调用前现查」，却内嵌了 7 个端点和 3 套枚举，且 L3 合同实测 393KB 不可能每次整读。改为：path/operationId 可依赖已核对写法；必填字段与固定枚举以 422 的 ProblemDetails 为准修正一次；项目自定义域（工作流状态、验收类型、成员、缺陷自定义字段）必须现查。
+- **改造为 [Agent Plugins 1.0.0](https://agent-plugins.org/) 插件包：仓库根即插件根。** `plugins/workflow/` 下的 `skills/`、`commands/` 与 `.claude-plugin/plugin.json` 全部上移到仓库根，新增符合规范的根 `plugin.json`（封闭 schema，必填 `$schema` + `name`）与 `LICENSE`。Agent Plugins 的分发地址就是仓库 URL（`npx plugins add Go1c/workflow-plugin`），插件根埋在子目录里就装不了。
+  - 两套格式**共存而非二选一**：Agent Plugins 读根 `plugin.json`，Claude Code 读 `.claude-plugin/plugin.json`，同名不同文件、不同 schema。marketplace 的 `source` 改为 `"./"`（官方支持的 marketplace-root 形态），Claude Code 安装路径不受影响。
+  - `commands/` 不在规范 v1 的组件类型内，保持在插件根供 Claude Code 读取；Agent Plugins 客户端按 §11.3 忽略不认识的组件类型，不影响合规。
+  - `workflow-update` 的宿主分流判据同步更新——原判据「路径含 `plugins/`」扁平化后恒不成立，会把宿主托管的安装误判成手动安装去自改目录。
 - README 重写为痛点驱动，并显性化原本只存在于提示词里的安全设计（双闸门授权、写后必读回、幂等恢复、三方一致性校验）。
 - **新增 7 条硬闸门**（`workflow-ops/references/gates.md`），内联进 `workflow-planning` 与 `workflow-ops` 两个 SKILL.md，由测试保证各处副本逐字一致。原先「不得把数据写进错误项目」（写错了要人来收拾）和「不要顺手重构无关模块」（风格偏好）用同一种句式同一种强度，模型无法区分哪条可以牺牲，于是在上下文压力下均匀降低所有条款的遵守率。闸门给出明确分层：这 7 条是停止条件，与正文其他要求冲突时以闸门为准。
 
@@ -31,6 +35,7 @@
 - 新增**反重复**断言：含凭证解析片段的文件必须有且只有 `connection.md`。
 - 新增 `package.json`（`npm test`）与 GitHub Actions CI；此前测试从未在 CI 跑过，且 `node --test tests/` 会因目录解析报 `MODULE_NOT_FOUND`。
 - CI 增加版本一致性检查：`VERSION` / `plugin.json` / `package.json` 三者相同，且 `CHANGELOG.md` 有对应条目。
+- **新增 `tests/agent-plugins-conformance.test.mjs`**：根 `plugin.json` 的 `$schema` 是 1.0.0 标识符原文、`name` 过 §5.5 全部命名约束、**顶层字段封闭**（多一个键就是违规，而客户端只会静默拒载不会报错）、`author` 只含 name/email/url、声明 `license` 必须有 `LICENSE` 文件、`skills/` 每个直接子目录都有 `SKILL.md` 且 frontmatter `name` 与目录名一致（客户端不递归找更深的 SKILL.md，名字对不上就是加载不到）、两份清单同名同版本、`source` 为 `"./"`。版本一致性从三方扩到四方。
 - **新增 L2 合同一致性测试**（`tests/contract/`，`npm run test:contract`）：以线上 OpenAPI 为真值，检查技能里出现的每个 API 路径都存在于合同、`bug-fields` 表里写的枚举值都在合同 enum 内、合同声明了 `maxLength` 的字段技能里必须写明、本地 `VERSION` 不低于线上发布版本；另含离线不变量（不得写死 `status`、凭证片段只此一份、技能包只含文本、清单齐备）。网络不可达时 skip 而非 fail。CI 每周一定时跑一次——平台改合同时提前收到红灯，而不是等用户撞 422。
 
 ## [0.3.0]

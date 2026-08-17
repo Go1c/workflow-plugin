@@ -1,0 +1,10 @@
+{
+  "name": "workflow",
+  "version": "0.4.0",
+  "description": "让 AI Agent 直连 Workflow（workflow.games）：规划需求与需求室、建需求、记 bug、查任务、流转状态、线上 QA 验收、查文档",
+  "author": {
+    "name": "Workflow",
+    "url": "https://workflow.games"
+  },
+  "homepage": "https://workflow.games"
+}
