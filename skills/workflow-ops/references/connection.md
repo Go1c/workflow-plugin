@@ -72,7 +72,7 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 
 ## 三、真值分层（哪些能记、哪些必须现查）
 
-平台迭代快，但不同类别的漂移速度不一样，一刀切「全部现查」会让规则形同虚设（合同 9000+ 行、近 400KB，不可能每次调用前整读）：
+平台迭代快，但不同类别的漂移速度不一样，一刀切「全部现查」会让规则形同虚设（合同 13000+ 行、近 600KB，不可能每次调用前整读）：
 
 | 类别 | 漂移 | 怎么办 |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 
 1. **L1** `https://workflow.games/llms.txt` —— 文档索引，先看有哪些指南。
 2. **L2** `https://workflow.games/md/guides/<slug>.md` —— 人读指南，字段口径与易错点，多数问题到这层就够。
-3. **L3** `https://workflow.games/openapi/gameflow.v1.yaml` —— 合同真值（9000+ 行）。**先 grep 定位 operationId / path / schema 名再分段读，不要整读。**
+3. **L3** `https://workflow.games/openapi/gameflow.v1.yaml` —— 合同真值（13000+ 行）。**先 grep 定位 operationId / path / schema 名再分段读，不要整读。**
 
 路径、必填字段、枚举拿不准时以 L3 为准。
 

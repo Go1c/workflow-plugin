@@ -50,7 +50,7 @@ description: 以 QA 身份在真实线上环境跑测并验收 Workflow（workfl
 
 ### 1. 读单，建立复现基线
 
-用 UUID 读取单据详情、当前状态、全部评论、可用 transitions 和附件列表（`displayKey` 只用于搜索与展示，不当 id 传参）。
+用 UUID 读取单据详情、当前状态、全部评论、可用 transitions 和附件列表（`displayKey` 只用于搜索与展示，不当 id 传参；读单完整性的共享口径见 [workflow-ops/references/read-card.md](../workflow-ops/references/read-card.md)）。
 
 - **看每一张图片附件的实际内容**——不要把附件元数据 JSON 当成图片。取内容走 `GET $WORKFLOW_API_BASE/attachments/<uuid>/content`。
 - 从描述与截图提取：页面、对象、前置状态、操作路径、预期、异常表现、视口或设备线索、客户端版本。

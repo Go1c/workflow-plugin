@@ -21,9 +21,9 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 | **G7** | 要在报告里写某项验证「通过」 | 只写**实际执行过**的命令与其真实输出；没跑的写「未执行」，不得用计划中的验证冒充结果 |
 <!-- gates:end -->
 
-## 与需求规划的边界
+## 与相邻技能的边界
 
-用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆多专业/多交付轨道」「安排预研与并行 wave」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、交付拓扑判定、模板化蓝图和独立授权后的批量落单。
+用户给的是一句话、文档或尚未定型的讨论结果，并要求「梳理需求」「规划需求池」「拆多专业/多交付轨道」「安排预研与并行 wave」「生成完整 Agent 提示词」时，转 **workflow-planning**。它负责讨论、交付拓扑判定、模板化蓝图和独立授权后的批量落单。用户要以执行者身份「拿单 / 领任务 / 开工 / 做完交付回写」时，转 **workflow-execute**——那是一条完整流程，不是单次操作。
 
 本技能只处理已经明确的单次业务操作：建一张字段已定的需求/工作项、查询、指派、流转、评论或附件。不得把原始想法临场扩写成一套开发计划，也不得在建单后自动启动实现。
 
@@ -35,20 +35,25 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 写操作前按 connection.md 逐条过防呆检查（对应 G1）。
 
-## 对象模型（三句话）
+## 对象层级（五句话）
 
-- **需求**（`R-` 单号）是核心对象；**缺陷没有独立资源**，就是 `POST /work-items` 里 `type=bug` 的工作项（`B-` 单号）。
-- **UUID 是 canonical id**：路由与写命令一律用 UUID；`R-`/`B-`/`T-` 单号只做展示与搜索，不当 id 传参。
+- **里程碑**（`MS-`）是时间节点，圈一组需求，状态由需求进度**自动派生**、不手改；**需求室 Room**（`RM-`）是聚合容器，收纳需求与缺陷（对象可不归属，至多属一室）。
+- **需求**（`R-` 单号）是核心对象；**缺陷没有独立资源**，就是 `POST /work-items` 里 `type=bug` 的工作项（`B-` 单号，任务/子需求是 `T-`）；**文档**（`DOC-`）可按 `requirementId` 关联需求。
+- **UUID 是 canonical id**：路由与写命令一律用 UUID；单号只做展示与搜索，不当 id 传参。
 - 错误一律 RFC 7807 ProblemDetails（带 `traceId`）；列表普遍 cursor 分页；写端点在项目冻结时返回 423。
 
 ## 动词分节
 
-- **建需求** → `POST /requirements`（只有 `title` 必填）。**不传 `status`**——需求恒落绑定工作流的初始态，创建接口根本不接受 status。
-- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；**建单前 `GET /search?q=` 查重**（单号精确 + 标题模糊），疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。同样**不传 `status`**，用户没给的字段一律不替他填。
-- **查询** → `GET /work-items` 带过滤参数，**cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。`/search` 是薄端点：只匹配标题、无全文检索、无 cursor，正文里的内容要靠列表端点翻页找。
+- **建需求 / 建任务** → `POST /requirements` 或 `POST /work-items`。**硬性口径见 [references/card-spec.md](references/card-spec.md)：裸标题不落库**（正文至少「背景 / 目标 / 验收 / 边界」四节），**建单前按 [references/search.md](references/search.md) 查重**。**不传 `status`**——恒落绑定工作流的初始态。
+- **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；建单前查重同上，疑似重复先报给用户；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。同样**不传 `status`**，用户没给的字段一律不替他填。
+- **建需求室** → `POST /rooms`（`name` 必填且 ≤ 80 字符）；批量收纳既有单 `POST /rooms/{roomId}/objects`。盘点一个 Room 的状态、验收完成度与证据评论 → 按 [references/orchestration.md](references/orchestration.md) 第四节。
+- **里程碑** → `POST /schedule/milestones`（`title` + `targetOn` 必填；**不传 `status`**——由关联需求进度派生）；把需求归属到里程碑 → `PUT /schedule/requirements/{requirementId}/milestone`（`reason` 必填；需求侧单选，归属新的自动解除旧的）。
+- **查询 / 搜索** → 搜索能力与「先搜后翻页」纪律见 [references/search.md](references/search.md)（`/search` 支持标题+正文召回与 cursor 分页）；列表 `GET /work-items` / `GET /requirements` 带过滤参数 **cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。
+- **读单** → 按 [references/read-card.md](references/read-card.md)：正文 + **评论列表** + **附件列表**（+ 需求单的验收项），缺一路不算读过；历史决策查 activity。
 - **指派 / 改字段** → `PATCH /work-items/{id}`，带 `reason` 写明变更理由；省略的字段不改动。
-- **状态流转** → **先 `GET` 该对象的 transitions 端点**（`/work-items/{id}/transitions` 或 `/requirements/{id}/transitions`，确切路径按 L3 现查）看可用动作与 `allowed`，**再 `POST` 执行**；不硬 `PATCH status`——项目可配自定义工作流，状态词表不是固定枚举。
-- **评论** → `POST /comments`（`targetType` + `targetId` + Markdown `body`）。
+- **状态流转** → **先 `GET` transitions**（`/work-items/{id}/transitions` 或 `/requirements/{id}/transitions`，两条路径均已按合同核实）看可用动作与 `allowed`，**再 `POST` transition 执行**；不硬 `PATCH status`——项目可配自定义工作流，状态词表不是固定枚举。
+- **重开 / 变更波及** → 上游变更（公共契约、共享合同）波及已完成或在途的卡时：现查该卡 transitions 找**回到工作态**的边 → `POST` 执行且 `reason` 写明波及来源（引发变更的单号 displayKey）→ 在被波及卡上**补一条评论**引用来源单号与波及内容 → 通知负责人。没有 `allowed=true` 的逆向边 → **转述 `blockedReason` / `guardCode` 给用户**（逆向边要项目管理员在工作流里配置），不硬闯、不 PATCH status 绕道。
+- **评论** → `POST /comments`（`targetType` + `targetId` + Markdown `body`）；评论要带图 → 先建评论再传 `targetType=comment` 的附件（两次请求，没有复合端点）。
 - **附件** → `POST /attachments`（multipart），模板见 `references/call-templates.md`。
 
 读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接（`https://<子域>.workflow.games/...`，优先用读回响应或搜索结果里的 deepLink）。
