@@ -5,7 +5,7 @@ description: 以执行者身份承接并交付一张已存在的 Workflow（work
 
 # workflow-execute — 拿单、执行、交回
 
-以执行者身份消费一张已存在的单：找到它 → 读全它 → 核对前置 → 流转开工 → 干活（插件外）→ 回写证据 → 流转待验收 → 交回。**拿单不是落单**：本技能不创建需求/Room，发现该建新单时报给用户转 workflow-ops 或 workflow-planning。
+以执行者身份消费一张已存在的单：找到它 → 读全它 → 核对前置 → **梳理需求、把决策点摆给用户讨论** → 流转开工 → 干活（能并行就并行子 Agent）→ 回写证据 → 流转待验收 → 交回。**拿单不是落单**：本技能不创建需求/Room，发现该建新单时报给用户转 workflow-ops 或 workflow-planning。
 
 ## 硬闸门（命中即停）
 
@@ -34,14 +34,15 @@ G1、G3、G4、G6、G7 全程适用。G2 的写入授权由**用户明确指派�
 
 **硬规则（两种模式之外没有第三条路）**：当前目录**没有 `.workflow` 绑定**时，禁止靠全局 `current_profile` 兜底解析凭证执行任何**写操作**——即使 config 里只有一个 profile。执行 Agent 常被派到临时目录/工作树干活，全局兜底写进去的是「碰巧配过的项目」，这是把数据写错项目之外的另一种越权写入。要写：先补绑定（转 workflow-setup 写 `.workflow`），或走模式二交回。
 
-## 流程（模式一全程自做；模式二做 2、3、5，其余写进交回报告）
+## 流程（模式一全程自做；模式二做 2、3、4、6，其余写进交回报告）
 
 1. **找单**：用户点名单号 → `/search` 精确定位拿 UUID；没点名 → `GET /me/workbench`（view=owned）或按 `ownerId` / `activeUserId` 过滤工作项列表。多张候选列给用户选，不自作主张。
 2. **读单**：按 [read-card.md](../workflow-ops/references/read-card.md) 四路拉全（正文 + 评论 + 附件 + 验收项）；关联单与历史同类单按 [search.md](../workflow-ops/references/search.md) 先搜。
 3. **核对前置与验收**：按 [orchestration.md](../workflow-ops/references/orchestration.md) 第三节逐张 GET 前置卡；前置未满足 → **停止报告，不偷跑**。验收项开工前读一遍，知道交付要证明什么。
-4. **开工流转**：现查 transitions 选「进行中」语义的边，POST 带 reason，读回。**不流转就开工是本技能要消灭的头号走样。**
-5. **干活**：目标仓库内的开发/制作按卡内容与所在环境规则执行，本插件不管辖。期间发现的新问题**报给用户**，不擅自建单。
-6. **回写与交回**：按 [references/execute-flow.md](references/execute-flow.md) 第六节的固定顺序（附件 → 证据评论 → 流转待验收，每步读回），评论用 [references/handoff.md](references/handoff.md) 的统一模板；最后按交回格式向用户/调度方汇报。**做完不回写等于没做完。**
+4. **梳理需求、拿到决策再动手**：产出一份简短梳理（目标复述 + 歧义/冲突点 + **需要用户决策的事项清单**，每项附建议 + 拆分与并行计划），摆给用户/调度方讨论；**全部决策点有答复之前不开工**。先自查再问：卡内评论/附件、历史单、目标仓库现状能回答的不拿去烦用户。确实没有决策点 → 说一句「无需决策」直接进入下一步，不为走形式空转。**跳过讨论直接开工、或不问就替用户拍板，都是走样。**
+5. **开工流转**：现查 transitions 选「进行中」语义的边，POST 带 reason，读回。**不流转就开工是本技能要消灭的头号走样。**
+6. **干活（能并行就并行）**：目标仓库内的开发/制作按卡内容与所在环境规则执行。宿主支持子 Agent 时，**按第 4 步确认过的拆分尽可能并行多个子 Agent 加快交付**——切分与汇总纪律见 [references/execute-flow.md](references/execute-flow.md) 第六节：互斥所有权切分、共享热点不并行、**子 Agent 不接触 Workflow 凭证与单据回写**、汇总后由主执行者亲自跑整体验证。期间发现的新问题**报给用户**，不擅自建单。
+7. **回写与交回**：按 [references/execute-flow.md](references/execute-flow.md) 第七节的固定顺序（附件 → 证据评论 → 流转待验收，每步读回），评论用 [references/handoff.md](references/handoff.md) 的统一模板（讨论定下的取舍写进「决策记录」小节）；最后按交回格式向用户/调度方汇报。**做完不回写等于没做完。**
 
 流程细节与全部 curl 模板见 [references/execute-flow.md](references/execute-flow.md)。
 

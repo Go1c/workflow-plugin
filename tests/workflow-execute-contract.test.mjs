@@ -87,6 +87,30 @@ describe("执行流程纪律", () => {
     assert.match(flow, /workItemsTruncated/);
   });
 
+  test("先梳理再开工：决策清单讨论完才流转，且不为走形式空转", () => {
+    // 走样两个方向都要堵：跳过讨论直接开工（自作主张），和没有决策点也硬问一轮（空转）。
+    assert.match(skill, /梳理需求、拿到决策再动手/);
+    assert.match(skill, /全部决策点有答复之前不开工/);
+    assert.match(flow, /## 4\. 梳理需求与决策讨论/);
+    const clarifyIdx = flow.indexOf("## 4. 梳理需求与决策讨论");
+    const startIdx = flow.indexOf("## 5. 开工流转");
+    assert.ok(clarifyIdx > 0 && startIdx > clarifyIdx, "梳理讨论必须排在开工流转之前");
+    assert.match(flow, /先自查再问/);
+    assert.match(flow, /每项给出建议选项/);
+    assert.match(flow, /不自作主张替用户拍板/);
+    assert.match(flow, /不为走形式空转/);
+  });
+
+  test("并行子 Agent 纪律：互斥所有权、共享热点不并行、子 Agent 不碰凭证与回写", () => {
+    assert.match(skill, /并行/);
+    assert.match(flow, /互斥所有权/);
+    assert.match(flow, /共享热点（同一文件、同一接口、同一资源）不并行/);
+    assert.match(flow, /子 Agent 不接触 Workflow 凭证、不做任何单据侧动作/);
+    // 子 Agent 说完成不算数：主执行者要亲自跑整体验证（G7 的并行版）。
+    assert.match(flow, /子 Agent 声称的「完成」不算证据/);
+    assert.match(flow, /不硬凑并行/);
+  });
+
   test("开工必先流转：现查 transitions，被 guard 挡住转述不硬闯", () => {
     assert.match(skill, /不流转就开工/);
     assert.match(flow, /\/transitions/);
@@ -114,7 +138,7 @@ describe("执行流程纪律", () => {
 
 describe("证据评论模板（验收方机械核对）", () => {
   test("模板小节齐全且要求写实", () => {
-    for (const section of ["改动清单", "验收对照", "实际运行的验证", "Known gaps", "边界声明"]) {
+    for (const section of ["改动清单", "验收对照", "实际运行的验证", "决策记录", "Known gaps", "边界声明"]) {
       assert.ok(handoff.includes(section), `证据评论模板缺少「${section}」`);
     }
     assert.match(handoff, /没跑的写「未执行」/);

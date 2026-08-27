@@ -18,7 +18,7 @@
 
 **The Workflow Agent Plugin connects AI coding agents — Claude Code, Cursor, and Codex — directly to [Workflow](https://workflow.games) (workflow.games), a project management platform for game development teams.** Once installed, the agent turns a one-line request into an executable delivery blueprint and files it, reports bugs with automatic deduplication, runs QA against your real production environment, and moves ticket status based on the verdict — and **every write must be verified by reading it back** before the agent is allowed to claim success.
 
-The plugin ships 7 skills, 6 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 70 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
+The plugin ships 7 skills, 6 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 72 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
 
 ---
 
@@ -41,7 +41,7 @@ This plugin exists for all three. **It is not an "let the AI call the API" switc
 | `workflow-setup` | Onboarding: registration walkthrough, API token creation, config write, connection verification, on-the-spot 401/403 triage |
 | `workflow-planning` | **Turns one sentence into an executable delivery blueprint** — decides single requirement vs. requirement room, splits delivery tracks, schedules parallel waves, writes acceptance criteria |
 | `workflow-ops` | Execution: create requirements / rooms / milestones, file bugs (with dedup), query tasks, assign, transition, reopen, comment, attach |
-| `workflow-execute` | **Claims and delivers a ticket end to end** — finds tickets assigned to you, reads them fully, transitions to in-progress, and on completion writes evidence back in a uniform template before moving to review. Supports credential-less execution with a dispatcher writing back. |
+| `workflow-execute` | **Claims and delivers a ticket end to end** — finds tickets assigned to you, reads them fully, surfaces decision points for discussion before transitioning to in-progress, parallelizes work across sub-agents, and on completion writes evidence back in a uniform template before moving to review. Supports credential-less execution with a dispatcher writing back. |
 | `workflow-qa` | **Runs QA in your real production environment** — reproduces bugs, retests fixes, issues a verdict, writes evidence and status back to the ticket. **Never concludes from source code.** |
 | `workflow-docs` | Answers questions by fetching live docs and the OpenAPI contract — **never from memory** |
 | `workflow-update` | Version self-check, sha256 verification, safe self-update |
@@ -107,7 +107,7 @@ The agent runs `GET /search` first, reports suspected duplicates **before** crea
 /workflow:take R-00012
 ```
 
-The agent reads the ticket **completely** (body + comments + attachments + acceptance items — missing any one of them doesn't count as having read it), verifies each prerequisite ticket's actual status, and only starts after querying available transitions and moving the card to in-progress. On completion it writes back in a fixed order: evidence attachments → **a uniform evidence comment** (change list, acceptance items checked one by one, commands actually run with key output, known gaps, boundary statement) → transition to review. **Unreported work counts as unfinished work.**
+The agent reads the ticket **completely** (body + comments + attachments + acceptance items — missing any one of them doesn't count as having read it), verifies each prerequisite ticket's actual status, then **clarifies the requirement first** — it lays out ambiguities and the decisions that need your call, each with a recommendation, and only after the discussion does it query available transitions and move the card to in-progress. During execution it **parallelizes work across multiple sub-agents** wherever the agreed split allows (mutually exclusive ownership, no parallelism on shared hotspots, sub-agents never touch credentials or ticket write-backs). On completion it writes back in a fixed order: evidence attachments → **a uniform evidence comment** (change list, acceptance items checked one by one, commands actually run with key output, decision log, known gaps, boundary statement) → transition to review. **Unreported work counts as unfinished work.**
 
 Multi-agent orchestration gets a second mode: the executing agent holds **no token at all** — the card arrives via the dispatch prompt, and it hands back a structured report a credential-holding dispatcher can write back **without asking a single follow-up**. An executing agent in a directory without a `.workflow` binding will **never** fall back to the global default project for writes.
 
