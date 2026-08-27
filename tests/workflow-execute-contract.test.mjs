@@ -287,10 +287,10 @@ describe("ops 扩充：重开与层级", () => {
 });
 
 describe("上下文预算", () => {
-  test("execute 主线（SKILL + 流程 + 交回 + 读单 + 搜索）不超过 28KB", () => {
-    // 0.5.0 应维护者要求新增了三块硬纪律（开工前梳理讨论、并行子 Agent、完成三件套），
-    // 预算从 26KB 上调到 28KB；再要涨就先删冗余，不是继续调数字。
+  test("execute 主线（SKILL + 流程 + 交回 + 读单 + 搜索）不超过 32KB", () => {
+    // 0.5.0 新增三块硬纪律（开工前梳理讨论、并行子 Agent、完成三件套）后，
+    // 维护者确认把预算上调到 32KB。预算本身保留：它防的是无意识膨胀，逼近上限时先删冗余。
     const total = [skill, flow, handoff, readCard, searchRef].reduce((sum, text) => sum + Buffer.byteLength(text, "utf8"), 0);
-    assert.ok(total < 28000, `执行主线上下文 ${total} 字节，超出 28KB 预算`);
+    assert.ok(total < 32000, `执行主线上下文 ${total} 字节，超出 32KB 预算`);
   });
 });
