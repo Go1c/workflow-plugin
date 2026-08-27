@@ -182,6 +182,18 @@ describe("L2 合同一致性", () => {
     }
   });
 
+  test("search 仍具备正文召回与 cursor 分页（search.md 的能力声明据此撰写）", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    // skills/workflow-ops/references/search.md 声称 /search 支持 scope=body 与 cursor 分页。
+    // 平台若回退这两个能力，技能会引导 Agent 发出 422 请求或漏掉查重结果——测试先亮红灯。
+    assert.ok(/SearchCursor:/.test(yaml), "合同里找不到 SearchCursor 参数——/search 分页能力变了，同步 search.md");
+    const scope = /SearchScope:[\s\S]{0,400}?enum:\s*\[([^\]]+)\]/.exec(yaml);
+    assert.ok(scope, "合同里找不到 SearchScope 的 enum——/search 匹配范围参数变了，同步 search.md");
+    for (const value of ["title", "body", "mixed"]) {
+      assert.ok(scope[1].includes(value), `SearchScope enum 不再包含 "${value}"（现为 [${scope[1]}]），同步 search.md`);
+    }
+  });
+
   test("本地 VERSION 不得低于线上发布版本", (t) => {
     if (offlineReason) return t.skip(offlineReason);
     const local = readFileSync(join(skillsRoot, "workflow-update/VERSION"), "utf8").trim();
