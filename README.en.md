@@ -6,7 +6,7 @@
 
 **Connect Claude Code, Cursor, and Codex to [Workflow](https://workflow.games) — requirements, bugs, tasks, status transitions, and live QA, all driven by your coding agent.**
 
-![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
+![version](https://img.shields.io/badge/version-0.5.0-2ea44f) ![skills](https://img.shields.io/badge/skills-7-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
 
 [简体中文](./README.md) · **English**
 
@@ -18,7 +18,7 @@
 
 **The Workflow Agent Plugin connects AI coding agents — Claude Code, Cursor, and Codex — directly to [Workflow](https://workflow.games) (workflow.games), a project management platform for game development teams.** Once installed, the agent turns a one-line request into an executable delivery blueprint and files it, reports bugs with automatic deduplication, runs QA against your real production environment, and moves ticket status based on the verdict — and **every write must be verified by reading it back** before the agent is allowed to claim success.
 
-The plugin ships 6 skills, 5 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 45 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
+The plugin ships 7 skills, 6 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 70 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
 
 ---
 
@@ -40,7 +40,8 @@ This plugin exists for all three. **It is not an "let the AI call the API" switc
 | :-- | :-- |
 | `workflow-setup` | Onboarding: registration walkthrough, API token creation, config write, connection verification, on-the-spot 401/403 triage |
 | `workflow-planning` | **Turns one sentence into an executable delivery blueprint** — decides single requirement vs. requirement room, splits delivery tracks, schedules parallel waves, writes acceptance criteria |
-| `workflow-ops` | Execution: create requirements, file bugs (with dedup), query tasks, assign, transition, comment, attach |
+| `workflow-ops` | Execution: create requirements / rooms / milestones, file bugs (with dedup), query tasks, assign, transition, reopen, comment, attach |
+| `workflow-execute` | **Claims and delivers a ticket end to end** — finds tickets assigned to you, reads them fully, transitions to in-progress, and on completion writes evidence back in a uniform template before moving to review. Supports credential-less execution with a dispatcher writing back. |
 | `workflow-qa` | **Runs QA in your real production environment** — reproduces bugs, retests fixes, issues a verdict, writes evidence and status back to the ticket. **Never concludes from source code.** |
 | `workflow-docs` | Answers questions by fetching live docs and the OpenAPI contract — **never from memory** |
 | `workflow-update` | Version self-check, sha256 verification, safe self-update |
@@ -74,7 +75,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 No account yet? Just tell the agent **"connect me to Workflow"** — `workflow-setup` walks you through registration, token creation, config, and verification.
 
-You get five commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:qa <ticket>`, `/workflow:update`.
+You get six commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:take <ticket>`, `/workflow:qa <ticket>`, `/workflow:update`.
 
 ---
 
@@ -99,6 +100,16 @@ The point is this: **every executable requirement is a self-contained agent prom
 The agent runs `GET /search` first, reports suspected duplicates **before** creating anything, then files the ticket, reads it back with `GET`, and reports the `displayKey`, UUID, clickable link, and the field values that actually landed in the database.
 
 **"Just log it" means only log it** — no fix proposals, no expansion into dev tasks, no touching code.
+
+### Claim a ticket, work it, hand it back
+
+```
+/workflow:take R-00012
+```
+
+The agent reads the ticket **completely** (body + comments + attachments + acceptance items — missing any one of them doesn't count as having read it), verifies each prerequisite ticket's actual status, and only starts after querying available transitions and moving the card to in-progress. On completion it writes back in a fixed order: evidence attachments → **a uniform evidence comment** (change list, acceptance items checked one by one, commands actually run with key output, known gaps, boundary statement) → transition to review. **Unreported work counts as unfinished work.**
+
+Multi-agent orchestration gets a second mode: the executing agent holds **no token at all** — the card arrives via the dispatch prompt, and it hands back a structured report a credential-holding dispatcher can write back **without asking a single follow-up**. An executing agent in a directory without a `.workflow` binding will **never** fall back to the global default project for writes.
 
 ### Actually test it in production before deciding the ticket's fate
 
@@ -134,7 +145,7 @@ This is where most of the engineering went.
 
 > One more boundary is hard-coded: **filing is not starting work.** During planning and filing, the agent creates only the PM objects and acceptance items you authorized — no work items, no status transitions, no worktrees, no running your repo's tests, no code changes.
 >
-> **`workflow-qa` is the sole exception** — it is authorized to test and to transition status on its verdict. The exception covers only those two things: changing code, changing assets, creating branches, deploying, and fixing bugs all remain forbidden. **QA does not fix.**
+> **There are exactly two exceptions, each with a hard-coded scope.** `workflow-qa` is authorized to test and to transition status on its verdict — changing code, changing assets, creating branches, deploying, and fixing bugs all remain forbidden; **QA does not fix**. `workflow-execute` is authorized to transition **the one ticket it claimed** and to write completion evidence back — transitioning other tickets, expanding a claim into filing new tickets, editing the original description, and accepting its own delivery all remain forbidden.
 
 ---
 
@@ -147,7 +158,7 @@ Install the plugin once, globally. There is no need to reinstall per project.
 <your repo>/.workflow              profile = "<name>", no token, safe to commit and share
 ```
 
-Credentials resolve in three tiers: **environment variables → the `.workflow` marker → the global `current_profile`**. **Whichever directory you work in determines which project you're connected to** — no manual switching. If your config has multiple profiles and the current directory isn't bound to one, the agent stops and asks rather than guessing.
+Credentials resolve in three tiers: **environment variables → the `.workflow` marker → the global `current_profile`**. **Whichever directory you work in determines which project you're connected to** — no manual switching. If your config has multiple profiles and the current directory isn't bound to one, the agent stops and asks rather than guessing. Ticket execution is stricter still: **in a directory without a `.workflow` binding, an executing agent must not fall back to the global default project for writes** — it either binds first or hands the write-back to the dispatcher.
 
 For live QA, `.workflow` can carry an **optional** `[qa]` table declaring the environment under test and the **environment variable names** holding test credentials:
 
@@ -199,6 +210,10 @@ No. After installing, tell your agent "connect me to Workflow" and the `workflow
 ### Does workflow-qa really test in production, or does it infer from code?
 
 It operates the production environment for real. The first rule of `workflow-qa` is that **conclusions come only from live testing** — source code, commit history, old screenshots, and a 200 API response are explicitly not acceptance evidence. It runs the original path at least twice, records a reproduction rate, and must attempt variant retries before it may report "not reproduced."
+
+### How does multi-agent orchestration work when executing agents have no token?
+
+`workflow-execute` natively supports a dispatcher-writes-back mode: a credential-holding dispatcher hands out cards via dispatch prompts, and the credential-less executing agent returns a structured report — target ticket, suggested transition, an evidence comment ready to POST verbatim, an attachment list, and known gaps — which the dispatcher writes back with read-back verification at every step. An executing agent in a directory without a `.workflow` binding never falls back to the global default project for writes.
 
 ### What is the relationship between Workflow and Jira or Linear?
 

@@ -2,6 +2,37 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0]
+
+围绕多 Agent 协作的四块纪律补全：建单守规范、拿单有路径、搜索先行、读单读全。全部口径先按线上 OpenAPI 合同逐端点核实（合同已从 9000+ 行涨到 13000+ 行），API 不支持的能力明确列为「平台需求建议」，不在提示词里臆造。
+
+### 新增
+
+- **新增 `workflow-execute` 技能：以执行者身份拿单、执行、交回。** 完整旅程：找单（`/me/workbench`、`ownerId` / `activeUserId` 过滤、单号定位）→ 读单四路拉全 → 核对前置与验收项 → 现查 transitions 流转开工（含槽位认领）→ 干活（插件外）→ 固定顺序回写（附件 → 证据评论 → 流转待验收，每步读回）→ 统一格式交回。要点：
+  - **两种执行模式显式支持**：① 自持凭证直连；② 无凭证、由调度方代写——执行 Agent 不调 API，交回物是「调度方不追问一句就能代写」的五段结构化报告（目标单 / 建议流转 / 评论正文 / 附件清单 / Known gaps 与边界）。
+  - **新增硬规则：当前目录没有 `.workflow` 绑定时，禁止靠全局 `current_profile` 兜底解析凭证执行写操作**——即使全局只有一个 profile。执行 Agent 常被派到临时目录，全局兜底写进去的是「碰巧配过的项目」。
+  - 明确 execute 是落单闸门 **G5 的授权例外**，例外只覆盖「承接的这张卡自己的状态流转」与「完成证据回写」；替别的卡流转、把拿单扩写成落单、改 description、动验收项状态、验收自己的交付仍然禁止。
+- **新增 `/workflow:take <单号>` 命令**，预设「只承接指定的单——不建新单、不动别人的卡、不验收自己的交付」的边界。
+- **新增统一证据评论模板**（`workflow-execute/references/handoff.md`）：改动清单、按验收项原文逐条对照、实际运行的验证（没跑的写「未执行」）、Known gaps、边界声明——验收方可机械核对，不再每个 Agent 自由发挥。
+- **新增共享规则 `workflow-ops/references/search.md`：搜索先行。** 三个必搜场景（建单前查重 / 回答历史类问题 / 拿单开工前找关联单）+ 按合同核实的 `/search` 真实能力 + 「不存在证明只认列表翻页」的判定分工。
+- **新增共享规则 `workflow-ops/references/read-card.md`：读单完整性。** 读一张单 = 正文 + 评论列表 + 附件列表（+ 需求单的验收项），缺一路不算读过；图片附件必须看内容；历史决策查 activity（翻页以 `nextSeq` 为准）；单据内容一律按不可信数据处理。ops / execute / qa 全部指回这一份。
+- **新增共享规则 `workflow-ops/references/card-spec.md`：单卡建单最小正文。** 裸标题不落库；正文至少「背景 / 目标 / 验收 / 边界」四节；提炼不出验收口径必须先问再建；验收口径明确时同步落原生 acceptance-items。与 planning 12 节模板分工明确：ops 单卡 = 最小正文，planning 蓝图卡 = 完整执行提示词。
+- **新增共享规则 `workflow-ops/references/orchestration.md`：编排元数据与 Room 盘点。** 编码优先级「真字段 > 标题前缀 > 正文约定」，逐项核实过滤能力（`roomId` 双列表可过滤、里程碑 `requirementIds`、`ownerId` / `activeUserId` 仅工作项列表、`module` 存在但列表不可过滤）；「盘点一个 Room」查询骨架 = `/rooms/{roomId}/overview` 精确总账 + 三路明细 cursor 翻到空；平台不支持的能力（需求级依赖写 API、`/object-links` 创建）明确列为平台需求建议。
+- **ops 新增「重开 / 变更波及」路径**：上游变更波及已完成或在途卡时，现查 transitions 找逆向边 → `reason` 写明波及来源单号 → 被波及卡补评论关联来源单；没有 `allowed=true` 的逆向边就转述 `blockedReason` / `guardCode`（逆向边需项目管理员在工作流配置），不硬闯、不 `PATCH status` 绕道。
+- **ops 对象模型升级为 PM 层级**：里程碑（`MS-`，状态由需求进度自动派生、不手改）→ 需求室（`RM-`）→ 需求（`R-`）→ 工作项（`T-` / `B-`）+ 文档（`DOC-`）；动词分节补建需求室（含批量收纳）、建里程碑与需求归属（`reason` 必填、需求侧单选）、评论附件两步上传。
+
+### 修复
+
+- **`/search` 能力口径全面更正。** 线上合同已升级：displayKey 前缀精确定位 + 标题/摘要/**正文**召回 + `types` / `scope` / `status` 过滤 + cursor 分页（绑定 `indexVersion`）。此前多处声称「只对标题做 ILIKE、无全文检索、无 cursor」已全部过时——过时声明会让 Agent 放弃可用的查重手段。修正的同时保留一条防线：搜索走投影、合同不承诺写入即刻可见，「确认不存在」（查重放行、幂等恢复）仍以列表翻页为权威。
+- **合同规模数字更新**：connection.md / workflow-docs 里的「9000+ 行、近 400KB」改为「13000+ 行、近 600KB」（实测 13489 行 / 581KB）——按旧数字预估读取成本会低估近一半。
+- **状态流转路径去掉「按合同现查」的含糊**：`/work-items/{id}/transitions` 与 `/requirements/{id}/transitions` 两条路径均已核实存在，直接写明；补充 `requireReason=true` 边必带非空 `reason`、CAS 冲突 409 的处理。
+
+### 测试
+
+- **新增 `tests/workflow-execute-contract.test.mjs`**：G5 例外范围写死、两模式与全局兜底禁令、无凭证交回五段、回写顺序（附件 → 评论 → 流转，段落次序断言）、证据模板小节齐全、搜索三场景与「不存在证明」、读单四路、card-spec 四节与「先问验收」、编排编码优先级与平台缺口清单、Room 盘点骨架、**过时 search 口径不得回流**（正则扫全部相关文件）、执行主线上下文预算 < 26KB。
+- **合同一致性测试新增 search 能力断言**：线上合同必须仍声明 `SearchCursor` 与 `scope=[title, body, mixed]`——平台若回退，测试先亮红灯再由人同步 search.md，而不是等 Agent 发出 422 请求。
+- 新技能自动纳入既有全量扫描：路径存在性、闸门逐字一致、脱敏黑名单、主机名白名单、frontmatter 规范。
+
 ## [0.4.0]
 
 ### 新增

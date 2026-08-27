@@ -6,7 +6,7 @@
 
 **把 Claude Code / Cursor / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转、线上验收，全部由 Agent 自己跑完。**
 
-![version](https://img.shields.io/badge/version-0.4.0-2ea44f) ![skills](https://img.shields.io/badge/skills-6-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
+![version](https://img.shields.io/badge/version-0.5.0-2ea44f) ![skills](https://img.shields.io/badge/skills-7-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
 **简体中文** · [English](./README.en.md)
 
@@ -18,7 +18,7 @@
 
 **Workflow Agent 插件把 Claude Code、Cursor、Codex 等 AI 编码 Agent 直接接入 [Workflow](https://workflow.games)（workflow.games）项目管理平台。** 装好之后，AI Agent 能把一句话需求拆成可执行的开发蓝图并落单、带查重地记录缺陷、在真实线上环境跑测验收，并按判定流转工单状态 —— 且**每一次写入都必须读回验证**才允许声称成功。
 
-插件包含 6 个技能、5 个斜杠命令、14 条硬闸门（G1–G7 落单闸门与 Q1–Q7 QA 闸门），45 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
+插件包含 7 个技能、6 个斜杠命令、14 条硬闸门（G1–G7 落单闸门与 Q1–Q7 QA 闸门），70 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
 
 ---
 
@@ -56,7 +56,8 @@ Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都�
 | :-- | :-- |
 | 🔌 `workflow-setup` | 从零接入：注册引导 → 建 token → 写配置 → 验证连接 → 401/403 现场分诊 |
 | 🧠 `workflow-planning` | **把一句话变成一套能直接派活的开发蓝图** —— 判定单需求还是需求室、拆交付轨道、排并行 wave、写验收 |
-| ⚡ `workflow-ops` | 干活：建需求、记 bug（自带查重）、查任务、指派、流转、评论、附件 |
+| ⚡ `workflow-ops` | 干活：建需求 / 需求室 / 里程碑、记 bug（自带查重）、查任务、指派、流转、重开、评论、附件 |
+| 🤝 `workflow-execute` | **拿单执行到交回** —— 找到指派给自己的单、读全、流转开工，完成后按统一模板回写证据并流转待验收；支持无凭证由调度方代写 |
 | 🧪 `workflow-qa` | **在真实线上环境跑测验收** —— 复现 bug、复测修复、判定、回写证据与状态，**不读代码下结论** |
 | 📖 `workflow-docs` | 答疑：现抓线上文档和 OpenAPI 合同回答，**不凭记忆瞎编** |
 | 🔄 `workflow-update` | 自检版本、校验 sha256、安全自更新 |
@@ -90,7 +91,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 没有账号也不要紧 —— 装完直接对 Agent 说 **「接入 Workflow」**，`workflow-setup` 一步步带你走完注册、建 token、写配置、验证连接。
 
-装好即得五个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:qa <单号>`、`/workflow:update`。
+装好即得六个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:take <单号>`、`/workflow:qa <单号>`、`/workflow:update`。
 
 ---
 
@@ -124,6 +125,16 @@ Agent 会先读你的输入、仓库里的 `AGENTS.md` / `CLAUDE.md` / 设计文
 建单前先 `GET /search` 查重 → 撞上疑似重复**先报给你**（不默默建第二张）→ 建单 → `GET` 读回 → 汇报 `displayKey` + UUID + 可点链接 + 实际落库的字段值。
 
 **「记一下」就只记录** —— 不提修复方案、不扩写成开发任务、不擅自开始改代码。
+
+### 🤝 拿一张单，从领活干到交回
+
+```
+/workflow:take R-00012
+```
+
+Agent 把单读**全**（正文 + 评论 + 附件 + 验收项，缺一路不算读过）、逐张核对前置单状态，然后现查 transitions 流转到进行中才开工。做完后按固定顺序回写：证据附件 → **统一结构的证据评论**（改动清单、按验收项逐条对照、实际跑过的命令与输出、Known gaps、边界声明）→ 流转到待验收。**做完不回写等于没做完。**
+
+多 Agent 编排下还有第二种姿势：执行 Agent **不持有任何 token**，卡内容随派遣 prompt 进来，交回一份调度方**不追问一句就能代写**的结构化报告，由持凭证的调度方统一回写。执行 Agent 在没绑定 `.workflow` 的目录里，**绝不会**拿全局默认项目兜底写数据。
 
 ### 🧪 真的去线上跑一遍，再决定这单怎么处置
 
@@ -187,7 +198,7 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 
 > 还有一条边界写死在提示词里：**落单不等于开工。** 规划与落单时，Agent 只创建你授权的 PM 对象和结构化验收项，不建 WorkItem、不流转状态、不创建 Worktree、不跑你仓库的测试、不动一行代码。
 >
-> **唯一的例外是 `workflow-qa`** —— 它被授权跑测并按判定流转状态，但例外只覆盖这两件事：改代码、改资产、建分支、部署、修 bug 一律仍然禁止。**QA 不下场修**，发现问题就回写证据交给实现方。
+> **例外只有两个，且范围都写死了。** `workflow-qa` 被授权跑测并按判定流转状态，但改代码、改资产、建分支、部署、修 bug 一律仍然禁止 —— **QA 不下场修**。`workflow-execute` 被授权流转**自己承接的那张卡**并回写完成证据，但替别的卡流转、把拿单扩写成落单、改原始描述、验收自己的交付一律仍然禁止。
 
 ---
 
@@ -200,7 +211,7 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 <你的仓库>/.workflow               一行 profile = "<名>"，不含 token，可提交给全队共享
 ```
 
-凭证按 **环境变量 → `.workflow` 标记 → 全局 `current_profile`** 三级解析 —— **人在哪个目录干活，就连哪个项目**，不用手动切。配置里有多个 profile 而当前目录没绑定？Agent 会停下来问你，而不是猜。
+凭证按 **环境变量 → `.workflow` 标记 → 全局 `current_profile`** 三级解析 —— **人在哪个目录干活，就连哪个项目**，不用手动切。配置里有多个 profile 而当前目录没绑定？Agent 会停下来问你，而不是猜。拿单执行的场景更严：**没有 `.workflow` 绑定的目录里，执行 Agent 禁止拿全局默认项目兜底写数据**——要么先绑定，要么交回给调度方代写。
 
 首次在某个项目目录接入时，`workflow-setup` 会引导你建 token 并写好 `.workflow`。
 
@@ -273,6 +284,10 @@ Workflow Agent 插件是**技能包（skills），不是 MCP server**。插件�
 ### 一台机器上接多个项目怎么办？
 
 插件全局装一份即可，不必按项目重复安装。`~/.config/workflow/config.toml` 每个项目一节 `[profiles.<名>]` 各放各的 token，项目仓库根放一个 `.workflow` 文件声明绑定哪个 profile。凭证按**环境变量 → `.workflow` 标记 → 全局 `current_profile`** 三级解析，人在哪个目录干活就连哪个项目。
+
+### 多个 Agent 编排干活，执行 Agent 没有 token 怎么办？
+
+`workflow-execute` 原生支持「调度代写」模式：持凭证的调度 Agent 派卡（卡内容随派遣 prompt 下发），无凭证的执行 Agent 干完活交回一份结构化报告 —— 目标单、建议流转、可直接 POST 的证据评论正文、附件清单、Known gaps —— 由调度方统一回写并逐步读回。执行 Agent 在没有 `.workflow` 绑定的目录里禁止拿全局默认项目兜底写数据。
 
 ### Workflow 和 Jira、Linear 这类工具是什么关系？
 
