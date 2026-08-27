@@ -120,13 +120,41 @@ describe("执行流程纪律", () => {
     assert.match(flow, /slots\/<slotKey>\/claim/);
   });
 
-  test("回写固定顺序：附件 → 证据评论 → 流转待验收，每步读回", () => {
-    assert.match(flow, /先有证据、再有结论、最后才流转/);
+  test("回写固定顺序：遗留补单 → 附件 → 证据评论 → 流转状态，每步读回", () => {
+    assert.match(flow, /先补单、再有证据、再有结论、最后才流转/);
+    const backfillIdx = flow.indexOf("遗留补单（先于证据评论）");
     const attachIdx = flow.indexOf("上传证据附件");
     const commentIdx = flow.indexOf("POST 证据评论");
-    const transitionIdx = flow.indexOf("流转到待验收");
-    assert.ok(attachIdx > 0 && commentIdx > attachIdx && transitionIdx > commentIdx, "回写顺序段落次序不对");
+    const transitionIdx = flow.indexOf("流转状态（待验收优先）");
+    assert.ok(
+      backfillIdx > 0 && attachIdx > backfillIdx && commentIdx > attachIdx && transitionIdx > commentIdx,
+      "回写顺序段落次序不对"
+    );
     assert.match(flow, /重发前，必须先读回/);
+  });
+
+  test("完成三件套一件不能少：状态流转 + 提交单号 + 遗留项落卡", () => {
+    // 用户强约束：开发完成 = 流转到待验收/已完成 + 评论带 Git/SVN 提交单号 + 未做事项补需求单。
+    assert.match(skill, /三件硬性交付一件不能少/);
+    assert.match(flow, /三件事一件不能少：状态流转、带提交单号的证据评论、遗留项落卡/);
+    assert.match(flow, /「提交单号」小节必填/);
+  });
+
+  test("流转语义：待验收优先，工作流没有验收态才允许流转已完成", () => {
+    assert.match(flow, /没有验收语义态/);
+    assert.match(flow, /才允许流转完成并在 reason 注明/);
+    // 有验收态时禁止跳过它自行完成——那是自验收。
+    assert.match(flow, /不得跳过它直接流转完成态/);
+    assert.match(skill, /有验收态绝不跳过它自行完成/);
+  });
+
+  test("遗留补单：这次不做的 TODO 必须经确认落卡，只写评论不算", () => {
+    assert.match(flow, /经用户确认后[\s\S]{0,20}workflow-ops 落单/);
+    assert.match(flow, /沉默丢弃/);
+    assert.match(handoff, /每条必须对应一张已落库的补需求单/);
+    assert.match(handoff, /用户决定不补/);
+    // 模式二：补单草稿随交回报告给调度方落单。
+    assert.match(handoff, /补单草稿/);
   });
 
   test("执行者不越权：不改 description、不动验收项、不流转完成态", () => {
@@ -138,12 +166,16 @@ describe("执行流程纪律", () => {
 
 describe("证据评论模板（验收方机械核对）", () => {
   test("模板小节齐全且要求写实", () => {
-    for (const section of ["改动清单", "验收对照", "实际运行的验证", "决策记录", "Known gaps", "边界声明"]) {
+    for (const section of ["改动清单", "提交单号", "验收对照", "实际运行的验证", "决策记录", "Known gaps", "边界声明"]) {
       assert.ok(handoff.includes(section), `证据评论模板缺少「${section}」`);
     }
     assert.match(handoff, /没跑的写「未执行」/);
     assert.match(handoff, /分支 \+ 提交号/);
     assert.match(handoff, /没有内容的写「无」/);
+    // 提交单号要能覆盖 Git 与 SVN 两种仓库，多仓库逐行列。
+    assert.match(handoff, /Git commit hash/);
+    assert.match(handoff, /SVN revision/);
+    assert.match(handoff, /多仓库逐行列/);
   });
 });
 
@@ -255,8 +287,10 @@ describe("ops 扩充：重开与层级", () => {
 });
 
 describe("上下文预算", () => {
-  test("execute 主线（SKILL + 流程 + 交回 + 读单 + 搜索）不超过 26KB", () => {
+  test("execute 主线（SKILL + 流程 + 交回 + 读单 + 搜索）不超过 28KB", () => {
+    // 0.5.0 应维护者要求新增了三块硬纪律（开工前梳理讨论、并行子 Agent、完成三件套），
+    // 预算从 26KB 上调到 28KB；再要涨就先删冗余，不是继续调数字。
     const total = [skill, flow, handoff, readCard, searchRef].reduce((sum, text) => sum + Buffer.byteLength(text, "utf8"), 0);
-    assert.ok(total < 26000, `执行主线上下文 ${total} 字节，超出 26KB 预算`);
+    assert.ok(total < 28000, `执行主线上下文 ${total} 字节，超出 28KB 预算`);
   });
 });
