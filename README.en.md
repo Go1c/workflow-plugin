@@ -192,7 +192,7 @@ surfaces = ["web"]
 
 | Install method | How to update |
 | :-- | :-- |
-| Claude Code (marketplace) | Supports autoUpdate, or update manually from the `/plugin` UI |
+| Claude Code (marketplace) | `claude plugin marketplace update workflow-plugin` + `claude plugin update workflow@workflow-plugin --scope user` (restart the session afterwards); autoUpdate and the `/plugin` UI also work |
 | Agent Plugins client | Re-run `npx plugins add Go1c/workflow-plugin` |
 | Codex / manual | Tell the agent "update the workflow plugin" — checks the published version, verifies sha256 per file, backs up the old version, installs |
 

@@ -5,13 +5,40 @@ description: 更新或检查 Workflow（workflow.games）Agent 插件版本时�
 
 # workflow-update — 检查与更新插件
 
-## 1. 读本地版本
+**先判安装形态，再查版本。** 插件有两条分发渠道，**版本真值不是同一个**：宿主托管安装（Claude Code marketplace）认公开仓的 `plugin.json`，手动安装（Codex / 官网脚本）认官网 `version.json`。两条渠道的发布节奏可以脱节，拿另一条渠道的版本号判自己，会得出「已是最新」甚至反向降级的错误结论。
+
+## 1. 判断安装形态
+
+看**本技能所在路径**：
+
+**A. 宿主托管安装** —— 路径在 `~/.claude/plugins/cache` 或其他客户端的插件缓存下；或从本技能目录向上两级即为插件根，其中存在 `plugin.json` 或 `.claude-plugin/plugin.json` → 走**第 2 节**。
+
+**B. 手动安装** —— 技能目录直接落在 `~/.codex/skills`、`.agents/skills` 或 `~/.claude/skills` 下，同级没有插件清单 → 走**第 3 节**。
+
+## 2. 宿主托管：交给宿主更新
+
+**这条路不读 `version.json`。** 那份清单只服务手动安装渠道，可能**滞后**于 marketplace 发布；宿主托管的版本真值是 marketplace 公开仓里的 `plugin.json`，由宿主自己拉取比对。用官网清单判宿主托管安装，最常见的结果是误报「已是最新」，用户永远升不上去。
+
+**本技能不自改插件目录**——宿主管理的目录由宿主维护，绕过它手改会造成状态不一致。改为提示用户走宿主自己的机制：
+
+- **Claude Code**：先刷新 marketplace，再更新插件。
+
+```
+claude plugin marketplace update workflow-plugin
+claude plugin update workflow@workflow-plugin --scope user
+```
+
+  也可以用 `/plugin` 界面，或等 marketplace autoUpdate 自己生效。**更新后必须重启会话**才加载新版本——不提醒的话用户会以为没升成功。
+
+- **其他 Agent Plugins 客户端**：用各自的安装器重装（例如 `npx plugins add` 那条路径）。
+
+收尾读 `claude plugin list`（或宿主对应的列表命令）确认版本已变，向用户报告新旧版本号。
+
+## 3. 手动安装：比对官网版本
 
 读**本技能目录下的 `VERSION` 文件**（安装包内由构建器生成，纯文本一行版本号）。
 
 - 没有 `VERSION` 文件 = 你运行的是源码态（开发仓里直接用），**提示无需更新**，结束。
-
-## 2. 查线上版本
 
 抓取：
 
@@ -25,17 +52,7 @@ https://workflow.games/plugin/version.json?cb=<当前 epoch 秒>
 
 - 线上 **==** 本地 → 报告「已是最新（<版本>）」，结束。
 - 线上 **<** 本地 → 本地更新（多半是源码态或线上发布滞后）。报告两个版本号并**结束，绝不"更新"**——照旧逻辑跑会把新版覆盖成旧版，是降级不是升级。
-- 线上 **>** 本地 → 才进入第 3 节。
-
-## 3. 宿主分流
-
-看本技能所在路径判断安装方式：
-
-**A. 宿主托管安装**（路径在 `~/.claude/plugins/cache` 或其他客户端的插件缓存下，或从本技能目录向上两级即为插件根、其中存在 `plugin.json` 或 `.claude-plugin/plugin.json`）：
-
-提示用户按宿主自己的方式更新——Claude Code 用 `/plugin` 界面或等 marketplace autoUpdate；其他 Agent Plugins 客户端用各自的安装器（如 `npx plugins add` 重装）。**本技能不自改插件目录**——宿主管理的目录由宿主维护，绕过它手改会造成状态不一致。
-
-**B. 手动安装**（技能目录直接落在 `~/.codex/skills`、`.agents/skills` 或 `~/.claude/skills` 下，同级没有插件清单）→ 自更新，按第 4 节。
+- 线上 **>** 本地 → 才进入第 4 节。
 
 ## 4. 自更新流程（仅手动安装）
 
@@ -49,4 +66,5 @@ https://workflow.games/plugin/version.json?cb=<当前 epoch 秒>
 
 - **只从 `workflow.games` 域下载**。清单里出现任何其他域的地址 → 中止并告警。
 - 技能包只应包含 **`.md` 与 `VERSION` 纯文本**。清单或下载内容里发现可执行文件（`.sh`、二进制等）→ **立即中止并告警**，不安装。
+- 宿主托管形态（第 2 节）**不下载任何文件**——它只调用宿主自己的命令，下载与落盘都由宿主负责。
 - 更新**绝不触碰** `~/.config/workflow/config.toml`——凭证与插件更新无关。
