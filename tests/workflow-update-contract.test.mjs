@@ -46,6 +46,26 @@ describe("分流先于查版本", () => {
     assert.match(opening, /版本真值/, "开篇必须点明两条渠道的版本真值不同");
   });
 
+  test("源码态最先判,且排在 A / B 之前", () => {
+    // 插件仓库自己的工作副本:技能目录向上两级就是仓库根,那里有 plugin.json 与
+    // .claude-plugin/plugin.json。不先判源码态的话,开发者会被指去跑宿主的 update 命令。
+    const routing = skill.slice(skill.search(/##\s*1\./), skill.search(/##\s*2\./));
+    assert.match(routing, /先命中先算/, "三条判定必须声明先后,不能并列");
+    const source = routing.search(/\*\*0\.\s*源码态\*\*/);
+    const hosted = routing.search(/\*\*A\.\s*宿主托管安装\*\*/);
+    const manual = routing.search(/\*\*B\.\s*手动安装\*\*/);
+    assert.ok(source !== -1, "缺少源码态判定");
+    assert.ok(source < hosted && hosted < manual, "顺序必须是 源码态 → 宿主托管 → 手动安装");
+    assert.match(routing, /\.git|tests\//, "源码态要给出可判定的特征");
+  });
+
+  test("手动安装的路径特征优先于宿主托管的清单特征", () => {
+    // 项目里恰好放一份 plugin.json,不该把 ~/.codex/skills 下的手动安装改判成宿主托管。
+    const routing = skill.slice(skill.search(/##\s*1\./), skill.search(/##\s*2\./));
+    assert.match(routing, /B 的路径特征优先于 A 的清单特征/);
+    assert.match(routing, /不在 B 列出的手动安装目录里/, "A 的清单特征必须显式让位给 B");
+  });
+
   test("两个分支都给出可判定的路径特征", () => {
     assert.match(skill, /~\/\.claude\/plugins\/cache/, "宿主托管的判定特征丢了");
     assert.match(skill, /\.claude-plugin\/plugin\.json/, "插件清单判定特征丢了");
