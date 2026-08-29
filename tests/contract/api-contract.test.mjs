@@ -171,14 +171,16 @@ describe("L2 合同一致性", () => {
 
   test("合同里带 maxLength 的字段，技能必须写明该约束", (t) => {
     if (offlineReason) return t.skip(offlineReason);
-    const limits = schemaMaxLengths(yaml, "CreateRoomRequest");
-    assert.ok(Object.keys(limits).length > 0, "CreateRoomRequest 不再声明 maxLength？确认合同变更");
-    for (const [field, limit] of Object.entries(limits)) {
-      // 必须是「字段名 + 上限数字」同现，光在别处出现过这个数字不算数。
-      const stated = allSkillText
-        .split("\n")
-        .some((line) => line.includes(field) && new RegExp(`\\b${limit}\\b`).test(line));
-      assert.ok(stated, `Room.${field} 的 maxLength=${limit} 没在任何技能里与字段名同现——中文蓝图会撞 422`);
+    for (const schema of ["CreateRoomRequest", "SupportTicketRequest"]) {
+      const limits = schemaMaxLengths(yaml, schema);
+      assert.ok(Object.keys(limits).length > 0, `${schema} 不再声明 maxLength？确认合同变更`);
+      for (const [field, limit] of Object.entries(limits)) {
+        // 必须是「字段名 + 上限数字」同现，光在别处出现过这个数字不算数。
+        const stated = allSkillText
+          .split("\n")
+          .some((line) => line.includes(field) && new RegExp(`\\b${limit}\\b`).test(line));
+        assert.ok(stated, `${schema}.${field} 的 maxLength=${limit} 没在任何技能里与字段名同现——撞 422 才会被发现`);
+      }
     }
   });
 
@@ -192,6 +194,43 @@ describe("L2 合同一致性", () => {
     for (const value of ["title", "body", "mixed"]) {
       assert.ok(scope[1].includes(value), `SearchScope enum 不再包含 "${value}"（现为 [${scope[1]}]），同步 search.md`);
     }
+  });
+
+  test("support 收件仍匿名，agent 渠道契约未变（workflow-feedback 据此撰写）", (t) => {
+    if (offlineReason) return t.skip(offlineReason);
+    // workflow-feedback 的前提是「公开匿名收件」。平台若给这两个端点加鉴权、改枚举
+    // 或改 agent 条件必填五件套，技能会引导 Agent 发出被拒的请求——测试先亮红灯。
+    const pathBlock = (path) => {
+      const start = yaml.indexOf(`\n  ${path}:`);
+      assert.ok(start >= 0, `合同里找不到 ${path}`);
+      const rest = yaml.slice(start + 1);
+      const next = rest.search(/\n {2}\//);
+      return next > 0 ? rest.slice(0, next) : rest;
+    };
+    for (const path of ["/support/config", "/support/tickets"]) {
+      assert.match(pathBlock(path), /security: \[\]/, `${path} 不再匿名（security 变了）——同步 workflow-feedback`);
+    }
+
+    for (const [field, expected] of [
+      ["source", ["human", "agent"]],
+      ["hostType", ["codex", "claude_code"]],
+      ["type", ["bug", "feature"]],
+    ]) {
+      const allowed = schemaEnum(yaml, "SupportTicketRequest", field);
+      assert.ok(allowed, `合同里找不到 SupportTicketRequest.${field} 的 enum——schema 可能已改名`);
+      for (const value of expected) {
+        assert.ok(
+          allowed.includes(value),
+          `SupportTicketRequest.${field} 不再包含 "${value}"（现为 [${allowed}]），同步 ticket-fields.md`,
+        );
+      }
+    }
+
+    assert.match(
+      yaml,
+      /required:\s*\[idempotencyKey, userConfirmed, pluginVersion, hostType, hostVersion\]/,
+      "agent 渠道的条件必填五件套变了——同步 ticket-fields.md 与 submit-flow.md",
+    );
   });
 
   test("本地 VERSION 不得低于线上发布版本", (t) => {
