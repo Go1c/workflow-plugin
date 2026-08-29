@@ -27,6 +27,8 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 本技能只处理已经明确的单次业务操作：建一张字段已定的需求/工作项、查询、指派、流转、评论或附件。不得把原始想法临场扩写成一套开发计划，也不得在建单后自动启动实现。
 
+用户要反馈的是 **Workflow 平台或本插件自身**的问题、体验或建议（不是往自己的项目里记单）时，转 **workflow-feedback**——记到自己项目走本技能的记 bug，报给平台方走 feedback，两条路不混。
+
 ## 前置：凭证与连接检查
 
 **完整读取 [connection.md](references/connection.md)** —— 凭证三级解析、`/me` 与 `/projects/current` 的分工、写操作三方一致性防呆、真值分层与失败处置表都在那里，是 setup / ops / planning 共用的单一真相源，不要凭记忆重写。

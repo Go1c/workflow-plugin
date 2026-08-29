@@ -99,6 +99,8 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 | 429 | 限流 per-token（约 60 突发 / 120 每分钟）；按 `Retry-After` 退避重试**至多 3 次**，并降低后续调用频率 |
 | 网络错误 / 5xx | **必须先查询确认是否已落库**（search 或列表），确认未落库才可重发——防重复建单 |
 
+**疑似平台自身问题**：按上表处置后仍稳定 500/503、实际行为与合同明显不符、或接口持续异常缓慢时，不要替平台往当前项目里记 bug，也不要无限重试——建议用户走 **workflow-feedback** 向平台方匿名反馈，附上 ProblemDetails 的 `traceId` 与 operationId。体验不佳、缺失功能之类的建议同样可走该通道。
+
 ## 五、纪律
 
 - token 一律走环境变量携带，不把明文拼进命令行参数。
