@@ -2,6 +2,26 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0]
+
+新增面向平台方的匿名反馈通道，并与「记 bug 进自己项目」彻底分流。全部口径按线上合同（`createSupportTicket` / `getSupportConfig`）与官方指南逐条核实：只收集用户主动提供的信息、发送前逐字确认、公开匿名端点不碰凭证、202 回执如实说明不是正式单。反馈范围不限于报错——体验不佳、加载或操作卡慢、缺失功能、产品建议同样可报。
+
+### 新增
+
+- **新增 `workflow-feedback` 技能：向 Workflow 平台方反馈问题与建议。** 完整旅程：开关探测（`GET /support/config`，无鉴权，`enabled=false` 转述人工渠道）→ 收集（只收本轮对话里用户主动提供或点名的素材；报错 / 行为与文档不符 / 体验差 / 卡慢归 `bug`，缺失功能 / 建议归 `feature`）→ 按字段口径组装并对照不发送清单自查 → 四件套逐字展示（完整报告 / 目标 Host / 附件名与大小 / 不发送清单）取得对这一版的明确确认 → 匿名 `POST /support/tickets`（multipart，`source=agent` 五件套齐全，不带任何凭证）→ 202 回执按固定格式如实收尾。要点：
+  - **7 条反馈硬闸门 F1–F7**（`workflow-feedback/references/feedback-gates.md`）：凭证隔离（不读 token、不带 `Authorization` 头 / Cookie）、不扫仓库（唯二例外是 `workflow-update/VERSION` 与宿主版本号）、先确认后发送（`userConfirmed` 只表示确认完成、不构成授权）、内容一改旧确认与旧幂等键同时作废、不发送清单命中即停、附件必须本会话点名且 ≤5 个、回执 ≠ 工单不得宣称「已建单」。与 G / Q 门同款：内联进 SKILL.md 并由测试锁死逐字一致；G 表在本技能明确「不适用也不内联」。
+  - **字段口径 `references/ticket-fields.md`**：每个 maxLength 与字段名同行（title ≤200、description ≤10000、reproduction ≤5000 等）；severity 用户说了才填、不替用户默认；邮箱只允许进 `contact` 字段（写进正文会撞服务端敏感扫描）；operationId / traceId 走专用字段不塞正文；附件按扩展名白名单判定。
+  - **幂等键生命周期 `references/submit-flow.md`**：每一版确认过的报告一枚随机 UUID；同版重试复用同 key（`idempotentReplay=true`，不重复收件、不重复扣额度）；改版重新确认重新生成；同 key 配不同内容 409 `idempotency_conflict`；绝不换 key 盲重发。
+  - **hostType 不硬造**：合同枚举只有 `claude_code` / `codex`，其他宿主停下改走人工渠道；503 区分「未开通收件」与「带附件但对象存储未配置」两种处置。
+- **新增 `/workflow:feedback <描述>` 命令**，预设「只收集主动提供的信息、先逐字确认后匿名提交、回执不是正式单」的边界。
+- **失败处置接线**：connection.md 失败处置表补「疑似平台自身问题（稳定 500/503、行为与合同不符、接口持续异常缓慢）→ 建议走 workflow-feedback 并附 traceId 与 operationId，体验与缺失功能类建议同样可走」——ops / execute / qa / setup / planning 五技能共享此表，一处接线全部受益；ops 边界段与 docs 分流段各补一句「报给平台方走 feedback，记到自己项目走记 bug」。
+
+### 测试
+
+- **新增 `tests/workflow-feedback-contract.test.mjs`（26 项）**：F1–F7 闸门块逐字一致与 G 表不内联、凭证隔离（全部文件不得出现凭证变量或 Bearer 头、不得指向凭证前置）、只收集不扫描、反馈范围触发词（体验 / 卡 / 慢 / 缺失功能 / 建议）、确认四件套与**「确认先于发送」的段落次序断言**、不发送清单逐项在场、agent 五件套在字段表与提交模板双双在场、幂等键生命周期与失败处置全行覆盖、回执语义（收件 ≠ 建单、无进度查询）、**status 字面量自证并延伸覆盖 commands/**、相对链接有效性、上下文预算 < 20KB。
+- **合同一致性测试新增 support 收件断言**：`/support/config` 与 `/support/tickets` 必须仍是 `security: []` 匿名端点、`source` / `hostType` / `type` 枚举未变、agent 条件必填五件套仍齐——平台若加鉴权或改契约，测试先亮红灯。**maxLength 同现检查从 `CreateRoomRequest` 扩展到 `SupportTicketRequest`**，平台改任何字段上限都会自动亮灯。
+- 新技能自动纳入既有全量扫描：路径存在性、闸门逐字一致、脱敏黑名单、主机名白名单、frontmatter 规范。
+
 ## [0.5.0]
 
 围绕多 Agent 协作的四块纪律补全：建单守规范、拿单有路径、搜索先行、读单读全。全部口径先按线上 OpenAPI 合同逐端点核实（合同已从 9000+ 行涨到 13000+ 行），API 不支持的能力明确列为「平台需求建议」，不在提示词里臆造。

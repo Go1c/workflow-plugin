@@ -6,7 +6,7 @@
 
 **把 Claude Code / Cursor / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转、线上验收，全部由 Agent 自己跑完。**
 
-![version](https://img.shields.io/badge/version-0.5.0-2ea44f) ![skills](https://img.shields.io/badge/skills-7-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
+![version](https://img.shields.io/badge/version-0.6.0-2ea44f) ![skills](https://img.shields.io/badge/skills-8-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
 **简体中文** · [English](./README.en.md)
 
@@ -18,7 +18,7 @@
 
 **Workflow Agent 插件把 Claude Code、Cursor、Codex 等 AI 编码 Agent 直接接入 [Workflow](https://workflow.games)（workflow.games）项目管理平台。** 装好之后，AI Agent 能把一句话需求拆成可执行的开发蓝图并落单、带查重地记录缺陷、在真实线上环境跑测验收，并按判定流转工单状态 —— 且**每一次写入都必须读回验证**才允许声称成功。
 
-插件包含 7 个技能、6 个斜杠命令、14 条硬闸门（G1–G7 落单闸门与 Q1–Q7 QA 闸门），75 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
+插件包含 8 个技能、7 个斜杠命令、21 条硬闸门（G1–G7 落单闸门、Q1–Q7 QA 闸门与 F1–F7 反馈闸门），102 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
 
 ---
 
@@ -60,6 +60,7 @@ Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都�
 | 🤝 `workflow-execute` | **拿单执行到交回** —— 找到指派给自己的单、读全、先摆决策点讨论再流转开工、并行子 Agent 干活，完成后按统一模板回写证据并流转待验收；支持无凭证由调度方代写 |
 | 🧪 `workflow-qa` | **在真实线上环境跑测验收** —— 复现 bug、复测修复、判定、回写证据与状态，**不读代码下结论** |
 | 📖 `workflow-docs` | 答疑：现抓线上文档和 OpenAPI 合同回答，**不凭记忆瞎编** |
+| 📣 `workflow-feedback` | **向平台方反馈问题与建议** —— 报错、体验不佳、卡慢、缺失功能都能报；只收集你主动提供的信息、发送前逐字确认、匿名提交，**不读 token、回执不是正式单** |
 | 🔄 `workflow-update` | 自检版本、校验 sha256、安全自更新 |
 
 ---
@@ -91,7 +92,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 没有账号也不要紧 —— 装完直接对 Agent 说 **「接入 Workflow」**，`workflow-setup` 一步步带你走完注册、建 token、写配置、验证连接。
 
-装好即得六个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:take <单号>`、`/workflow:qa <单号>`、`/workflow:update`。
+装好即得七个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:take <单号>`、`/workflow:qa <单号>`、`/workflow:feedback <描述>`、`/workflow:update`。
 
 ---
 
@@ -149,6 +150,16 @@ Agent 读单、把**每一张截图附件都看一遍**建立复现基线，然�
 > **「结论只来自线上实测」是写死在提示词里的第一条。** 读代码、看提交记录、旧截图、接口响应 —— 一律不算验收证据。本地和 dev 跑通了也不能冒充线上结论；证据不够就判「阻塞」告诉你缺什么，**不会给你一个猜出来的"应该修好了"**。
 >
 > 另外两条：**「未复现」不等于「不存在」** —— 变体没试完不许写，要按 `cannot_reproduce` 关单必须再问你一次。**QA 不下场修** —— 发现问题就回写证据交给实现方，不改一行代码。
+
+### 📣 遇到平台问题？一句话反馈给 Workflow
+
+```
+/workflow:feedback 需求列表加载要十几秒，太慢了
+```
+
+Agent 只整理你**主动提供**的信息（不扫仓库、不读任何凭证），把完整报告、目标 Host、附件清单与不发送清单**逐字亮给你确认**，确认后才匿名提交到平台客服收件箱。返回的 `sup_` 编号是**待人工审核的收件，不是正式单** —— 它会如实告诉你这一点，而不是宣称「已建单」。
+
+**报错、体验不佳、卡顿慢、缺失功能、产品建议都能报** —— 不限于 bug。
 
 ---
 
@@ -271,7 +282,7 @@ Workflow Agent 插件是**技能包（skills），不是 MCP server**。插件�
 
 ### 让 AI 直接写线上项目管理数据，安全吗？
 
-插件用 14 条硬闸门约束写操作。写入前强制核对 `project.subdomainPrefix`、实际 API Host、`.workflow` 绑定的 profile 三方一致，对不上就停；每个 POST/PATCH 之后强制 `GET` 读回，**没有读回证据不许说「已创建」**；token 只走环境变量，任何输出里只以 `wfp_` + 前 8 位指代。
+插件用 21 条硬闸门约束一切对外写入。项目写操作前强制核对 `project.subdomainPrefix`、实际 API Host、`.workflow` 绑定的 profile 三方一致，对不上就停；每个 POST/PATCH 之后强制 `GET` 读回，**没有读回证据不许说「已创建」**；token 只走环境变量，任何输出里只以 `wfp_` + 前 8 位指代。
 
 ### 使用这个插件需要先有 Workflow 账号吗？
 
@@ -288,6 +299,14 @@ Workflow Agent 插件是**技能包（skills），不是 MCP server**。插件�
 ### 多个 Agent 编排干活，执行 Agent 没有 token 怎么办？
 
 `workflow-execute` 原生支持「调度代写」模式：持凭证的调度 Agent 派卡（卡内容随派遣 prompt 下发），无凭证的执行 Agent 干完活交回一份结构化报告 —— 目标单、建议流转、可直接 POST 的证据评论正文、附件清单、Known gaps —— 由调度方统一回写并逐步读回。执行 Agent 在没有 `.workflow` 绑定的目录里禁止拿全局默认项目兜底写数据。
+
+### 向平台反馈后，为什么我的项目里没有出现 Bug 单？
+
+`sup_` 开头的是平台客服收件编号，不是正式单号。反馈先进入平台方的待审核收件箱，只有平台运营人员审核并转正后才会产生正式单——`workflow-feedback` 不能跳过这一步，也没有公开的收件进度查询入口。想把问题记进**你自己的项目**，用的是 `/workflow:bug`（workflow-ops），两条路互不混淆。
+
+### 反馈会带上我的 token 或项目文件吗？
+
+不会。`workflow-feedback` 走公开匿名端点，**不读取任何 Workflow 凭证**、不带 `Authorization` 头或 Cookie；素材只来自你主动提供的内容，发送前把完整报告与不发送清单（token、配置、环境变量、项目正文、完整请求体等）逐字展示给你确认。服务端还会再扫描一遍，命中敏感内容直接拒收（422）。
 
 ### Workflow 和 Jira、Linear 这类工具是什么关系？
 

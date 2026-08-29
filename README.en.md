@@ -6,7 +6,7 @@
 
 **Connect Claude Code, Cursor, and Codex to [Workflow](https://workflow.games) — requirements, bugs, tasks, status transitions, and live QA, all driven by your coding agent.**
 
-![version](https://img.shields.io/badge/version-0.5.0-2ea44f) ![skills](https://img.shields.io/badge/skills-7-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
+![version](https://img.shields.io/badge/version-0.6.0-2ea44f) ![skills](https://img.shields.io/badge/skills-8-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
 
 [简体中文](./README.md) · **English**
 
@@ -18,7 +18,7 @@
 
 **The Workflow Agent Plugin connects AI coding agents — Claude Code, Cursor, and Codex — directly to [Workflow](https://workflow.games) (workflow.games), a project management platform for game development teams.** Once installed, the agent turns a one-line request into an executable delivery blueprint and files it, reports bugs with automatic deduplication, runs QA against your real production environment, and moves ticket status based on the verdict — and **every write must be verified by reading it back** before the agent is allowed to claim success.
 
-The plugin ships 7 skills, 6 slash commands, and 14 hard gates (G1–G7 for writes, Q1–Q7 for QA). Its 75 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
+The plugin ships 8 skills, 7 slash commands, and 21 hard gates (G1–G7 for writes, Q1–Q7 for QA, F1–F7 for feedback). Its 102 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
 
 ---
 
@@ -44,6 +44,7 @@ This plugin exists for all three. **It is not an "let the AI call the API" switc
 | `workflow-execute` | **Claims and delivers a ticket end to end** — finds tickets assigned to you, reads them fully, surfaces decision points for discussion before transitioning to in-progress, parallelizes work across sub-agents, and on completion writes evidence back in a uniform template before moving to review. Supports credential-less execution with a dispatcher writing back. |
 | `workflow-qa` | **Runs QA in your real production environment** — reproduces bugs, retests fixes, issues a verdict, writes evidence and status back to the ticket. **Never concludes from source code.** |
 | `workflow-docs` | Answers questions by fetching live docs and the OpenAPI contract — **never from memory** |
+| `workflow-feedback` | **Files feedback to the Workflow platform team** — errors, poor UX, slowness, and missing features alike; collects only what you volunteered, requires verbatim confirmation before an anonymous submit, **never reads your token; the receipt is not a ticket** |
 | `workflow-update` | Version self-check, sha256 verification, safe self-update |
 
 ---
@@ -75,7 +76,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 No account yet? Just tell the agent **"connect me to Workflow"** — `workflow-setup` walks you through registration, token creation, config, and verification.
 
-You get six commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:take <ticket>`, `/workflow:qa <ticket>`, `/workflow:update`.
+You get seven commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:take <ticket>`, `/workflow:qa <ticket>`, `/workflow:feedback <description>`, `/workflow:update`.
 
 ---
 
@@ -122,6 +123,16 @@ The agent reads the ticket, **looks at every screenshot attachment** to establis
 There are exactly six verdicts: **confirmed, partially confirmed, fixed, not reproduced, duplicate, blocked.** The agent then attaches evidence, appends a QA record block to the description (leaving the original text untouched), posts a structured comment, and transitions status after querying available transitions live.
 
 > **"Conclusions come only from live testing" is the first rule in the prompt.** Reading source code, checking commit history, old screenshots, a 200 response — none of these count as acceptance evidence. Passing locally or on dev cannot stand in for a production conclusion. If evidence is insufficient, the verdict is "blocked" and the agent tells you what's missing, rather than handing you a guessed "should be fixed now."
+
+### Hit a platform problem? Report it in one line
+
+```
+/workflow:feedback the requirements list takes over ten seconds to load
+```
+
+The agent assembles **only what you volunteered** (no repo scanning, no credentials), shows you the full report, target host, attachment list, and do-not-send list **verbatim for confirmation**, and only then submits anonymously to the platform's support inbox. The returned `sup_` id is **a pending intake receipt, not a ticket** — and the agent says so instead of claiming "ticket created."
+
+**Errors, poor UX, sluggish loading, missing features, product suggestions — all reportable**, not just bugs.
 
 ---
 
@@ -201,7 +212,7 @@ The Workflow Agent Plugin is a **skill package, not an MCP server**. It runs no 
 
 ### Is it safe to let an AI write to a production project tracker?
 
-The plugin constrains writes with 14 hard gates. Before writing, it verifies that `project.subdomainPrefix`, the live API host, and the profile bound in `.workflow` all agree, and stops if they don't. Every POST/PATCH is followed by a mandatory `GET` read-back, and **without read-back evidence the agent may not claim success**. Tokens travel only in environment variables and appear in output only as `wfp_` plus 8 characters.
+The plugin constrains every outbound write with 21 hard gates. Before writing to your project, it verifies that `project.subdomainPrefix`, the live API host, and the profile bound in `.workflow` all agree, and stops if they don't. Every POST/PATCH is followed by a mandatory `GET` read-back, and **without read-back evidence the agent may not claim success**. Tokens travel only in environment variables and appear in output only as `wfp_` plus 8 characters.
 
 ### Do I need a Workflow account before installing?
 
@@ -214,6 +225,14 @@ It operates the production environment for real. The first rule of `workflow-qa`
 ### How does multi-agent orchestration work when executing agents have no token?
 
 `workflow-execute` natively supports a dispatcher-writes-back mode: a credential-holding dispatcher hands out cards via dispatch prompts, and the credential-less executing agent returns a structured report — target ticket, suggested transition, an evidence comment ready to POST verbatim, an attachment list, and known gaps — which the dispatcher writes back with read-back verification at every step. An executing agent in a directory without a `.workflow` binding never falls back to the global default project for writes.
+
+### I sent feedback — why is there no bug in my project?
+
+A `sup_` id is a support-intake receipt, not a ticket number. Feedback lands in the platform's pending review inbox; a real ticket exists only after platform operators review and convert it. `workflow-feedback` cannot skip that step, and there is no public endpoint to query intake progress. To record an issue **in your own project**, use `/workflow:bug` (workflow-ops) — the two channels never mix.
+
+### Does feedback carry my token or project files?
+
+No. `workflow-feedback` uses a public anonymous endpoint: it **reads no Workflow credentials** and sends no `Authorization` header or cookies. Material comes only from what you volunteered, and before sending, the agent shows you the full report plus the do-not-send list (tokens, config, environment variables, project content, full request bodies, and more) verbatim. The server scans again on its side and rejects sensitive content with a 422.
 
 ### What is the relationship between Workflow and Jira or Linear?
 
