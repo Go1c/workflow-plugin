@@ -247,7 +247,7 @@ surfaces = ["web"]
 
 | 安装方式 | 怎么更新 |
 | :-- | :-- |
-| Claude Code（marketplace） | 支持 autoUpdate 自动升级，也可在 `/plugin` 界面手动更新 |
+| Claude Code（marketplace） | `claude plugin marketplace update workflow-plugin` + `claude plugin update workflow@workflow-plugin --scope user`（更新后需重启会话）；也支持 autoUpdate 自动升级或在 `/plugin` 界面手动更新 |
 | Agent Plugins 客户端 | 重跑一次 `npx plugins add Go1c/workflow-plugin` |
 | Codex / 手动安装 | 对 Agent 说「更新 workflow 插件」—— 查线上版本 → 逐文件校验 sha256 → 备份旧版 → 就位 |
 
