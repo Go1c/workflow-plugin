@@ -252,9 +252,10 @@ describe("共享纪律：编排元数据与 Room 盘点（orchestration.md）", 
     assert.match(orchestration, /activeUserId/);
   });
 
-  test("平台不支持的能力列成建议、不臆造：需求级依赖、object-links 只读", () => {
-    assert.match(orchestration, /需求级依赖关系没有写 API/);
-    assert.match(orchestration, /object-links[\s\S]{0,20}只读/);
+  test("平台无向引用与需求依赖方向分离，不臆造额外关系 API", () => {
+    assert.match(orchestration, /需求级有向依赖关系没有独立 API/);
+    assert.match(orchestration, /bindRequirementReference/);
+    assert.match(orchestration, /source[\\/]target/);
     assert.match(orchestration, /平台需求建议/);
     // module 列表不可过滤——不许臆造查询参数。
     assert.match(orchestration, /不要臆造 module 查询参数/);

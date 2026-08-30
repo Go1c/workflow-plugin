@@ -25,7 +25,7 @@ description: 以 QA 身份在真实线上环境跑测并验收 Workflow（workfl
 | **Q7** | 变体重试没做完就想写「未复现」，或想把「未复现」当成「问题不存在」去关单 | **停止**。判「未复现」必须列全已尝试变体，且**保持当前状态不流转**；要按 `cannot_reproduce` 关单必须另取用户授权 |
 <!-- qa-gates:end -->
 
-落单闸门 **G1–G7** 里的 G1、G2、G3、G4、G6、G7 在本技能同样全程适用；**G5 是唯一例外**——QA 被授权跑测与流转，但例外只覆盖这两件事：改代码、改资产、建分支、部署、修 bug 一律仍然禁止。发现问题就回写证据交给实现方，**QA 不下场修**。
+落单闸门 **G1–G7** 里的 G1、G2、G3、G4、G6、G7 在本技能同样全程适用；**G5 是唯一例外**——QA 被授权跑测与流转，但例外只覆盖这两件事：改代码、改资产、建分支、部署、修 bug 一律仍然禁止。发现问题就回写证据交给实现方，**QA 不下场修**。读取 [permission-modes.md](../workflow-ops/references/permission-modes.md) 与 [draft-format.md](../workflow-ops/references/draft-format.md)：QA 证据、评论、描述块、resolution 和状态动作先进入本地 bundle，再按策略上传；Q1-Q7 不能被 `full` 绕过。
 
 ## 边界：QA 做什么、不做什么
 
@@ -90,7 +90,7 @@ description: 以 QA 身份在真实线上环境跑测并验收 Workflow（workfl
 
 ### 5. 回写
 
-按 [references/qa-writeback.md](references/qa-writeback.md) 执行：写入顺序、description 的 QA 块拼装规则（含 `expectedUpdatedAt` 并发校验）、评论模板、流转与 `resolution` 的时序约束、幂等恢复，全在那里。
+按 [references/qa-writeback.md](references/qa-writeback.md) 执行：先把写入顺序、description 的 QA 块拼装规则（含 `expectedUpdatedAt` 并发校验）、评论模板、流转与 `resolution` 的时序约束写入 bundle，再由 `workflow-upload` 上传和读回；幂等恢复全在那里。
 
 一条最容易踩的：**`resolution` 只能在条目已处于终态时写**，非终态写必 422——永远是「先流转到终态，再写结论」。
 

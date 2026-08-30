@@ -1,6 +1,20 @@
-# 蓝图写入、读回与恢复
+# 蓝图本地化、上传、读回与恢复
 
-本文件只在候选落单时读取。先完成只读预检，再取得针对确切项目和对象清单的写入授权；不得把“蓝图没问题”解释成 API 写权限。
+本文件只在候选落单时读取。**先在本地生成可恢复 bundle，再上传**：规划、查重、依赖分析和
+字段整理都不需要等待线上写入；只有 `workflow-upload` 读取并校验 manifest 后才会 POST/PATCH。
+蓝图内容批准与**独立写入确认**是两道闸门，不得把“蓝图没问题”解释成 API 写权限。
+
+## 本地优先交付
+
+1. 为每次规划生成稳定的 `bundleId`，按 [draft-format.md](../../workflow-ops/references/draft-format.md)
+   写入 manifest、每张卡、附件索引、查重快照和依赖分析；目录放在 `.workflow-drafts/<bundleId>/`。
+2. 在上下文不足、网络不可用或用户暂不想上传时，停在 `ready`，向用户交付 bundle 路径、摘要、
+   依赖 DAG 和待上传数量；不强迫逐张线上创建。新会话可用 `/workflow:upload <bundleId>` 从
+   checkpoint 继续，不依赖原始对话。
+3. bundle 中只保存获用户提供或模型推断的结构化数据，不保存 token。依赖边、重复处置和每个
+   写操作都必须有 evidence、confidence、inferenceMethod 与确定性 `opId`。
+4. `plan` 模式永远停在本地；`manual`、`auto`、`full` 的上传授权、并发度和安全闸门由
+   [workflow-upload](../../workflow-upload/SKILL.md) 统一执行。线上写入不在本文件直接发起。
 
 ## 复用连接与合同规则
 
@@ -17,7 +31,7 @@
 4. `GET /projects/{projectId}/acceptance/types`（`projectId` 取自 `/projects/current`），选择与蓝图语义匹配的 active 类型及 `systemSemantic=not_started` 的 active 初始状态；创建验收项时 `statusId` 必填，`acceptanceTypeId` 随之确定。存在多个会改变报表口径的候选时，在写入确认前让用户决定，不按名称猜。
 5. **字段长度按字符（rune）算，中文一个字算一个**：Room `name` ≤ 80、`description` ≤ 2000、`module` ≤ 80，超限 422。生成 Room 名和描述时先自检长度——描述要同时装共同目标、蓝图标记、交付轨道和后续 PATCH 追加的 displayKey 与链接，2000 字符要留出余量，装不下的内容放 `[原始需求]` 正文而不是硬塞进 Room 描述。
 6. Requirement 指定 owner 时，从当前项目成员读模型按稳定 ID 核对；姓名/邮箱匹配不唯一就让用户决定。未指定时明确展示“API 将采用创建人默认”，不得静默把责任角色当成成员 ID。
-7. 展示目标 profile/项目、蓝图 ID/修订号、将复用/更新/新建的对象、现值到目标值的字段 diff、Requirement PM 字段与实际 owner、结构化验收项数量、附件清单、重复处置和不落单的条件化提纲。用户对这份确切清单明确授权后才能 POST/PATCH；任何变化都重新确认。
+7. 展示目标 profile/项目、蓝图 ID/修订号、将复用/更新/新建的对象、现值到目标值的字段 diff、Requirement PM 字段与实际 owner、结构化验收项数量、附件清单、重复处置、依赖边数量和不落单的条件化提纲。用户对这份确切清单明确授权后才能上传；任何变化都重新确认。线上具体 POST/PATCH 仍须满足“用户对这份确切清单明确授权后才能 POST/PATCH”的 G2 口径，并由上传器执行。
 
 ## 复用与更新已有对象
 
@@ -28,25 +42,31 @@
 
 ## 简单需求写入
 
-1. 用完整 Agent 提示词创建一条 Requirement，写入已批准的 title、description、priority、risk、module、category、ownerId 等适用字段，并用 `reason` 关联蓝图 ID/修订号；不显式写 status，让绑定工作流决定初始态。
-2. 将“验收标准”里的原子条件逐条创建为原生 acceptance-item，使用预检选定的类型/初始状态，`sourceKind=ai`，`sourceRef` 写蓝图标记；保持与正文相同顺序。
-3. 用户提供本地原始文件且授权上传时，把文件上传到该 Requirement。只有 URL 的来源保留链接，不擅自下载转存。
-4. GET 读回 Requirement，列出 acceptance-items 和 attachments，核对字段、顺序、归属和数量。
+1. 用完整 Agent 提示词把一条 Requirement 和其 acceptance-items、附件操作编码进 manifest；不显式写 status，让绑定工作流决定初始态。
+2. 用户提供本地原始文件时只登记路径和 sha256，上传器在获授权后上传到该 Requirement；只有 URL 的来源保留链接，不擅自下载转存。
+3. 上传器按依赖就绪条件执行操作。独立节点、验收项和附件可受控并发，单个 Requirement 的互相竞争更新按资源锁串行。
+4. 每个 POST/PATCH/附件请求都由上传器立即 GET 读回；验收项使用 `sourceKind=ai`、蓝图标记作为 `sourceRef`，列出 acceptance-items 和 attachments，核对字段、顺序、归属和数量。
 5. 停止；不创建 WorkItem，不流转状态，不进入代码或资产制作。
 
 ## Requirement Room 写入
 
-1. 创建 Room，名称、描述和 module 使用批准值；描述先写共同目标、蓝图标记、交付轨道与“原始需求待创建”。不显式归档。
-2. 创建 `[原始需求]` Requirement 并设置 `roomId`，用 `reason` 关联蓝图 ID/修订号。正文写来源、附件/链接、决策账本、假设、范围/非目标、决策门和变更影响，不套可执行 Agent 模板。
-3. 把已授权的本地原始文件上传到 `[原始需求]`；附件只存一份。读回附件后再继续。
-4. 再 GET Room 核对 `updatedAt` 未被他人改变，然后 PATCH 描述，写入原始需求 displayKey、链接和蓝图标记，再 GET Room 核对。
-5. 按 DAG 拓扑顺序创建可执行 Requirement。渲染正文时，把临时前置编号替换为已读回的真实 displayKey、标题与链接；同 wave 无前置的卡顺序不代表执行依赖。
-6. 每创建一张 Requirement，立即写入它的原生 acceptance-items，再 GET Requirement 并列出验收项，记录 UUID、displayKey、title、category、roomId、链接和数量。
-7. 全部写入后再次 GET Room 和所有 Requirement，核对 Room 聚合、蓝图标记、归属、字段、验收项和附件。当前合同没有通用 Requirement 前置关系写接口时，依赖保留在正文；不得臆造结构化依赖端点。
+1. 把 Room、`[原始需求]` Requirement、可执行 Requirement、验收项、附件和 Room PATCH 编码为带依赖的 manifest 操作；不显式归档。
+2. 上传器先创建并读回 Room，再并发创建同一 wave 中无前置的 Requirement；每个节点读回 UUID/displayKey 后才释放其验收项、附件和下游节点。
+3. 渲染正文时，把临时前置编号替换为已读回的真实 displayKey、标题与链接；同 wave 无前置的卡顺序不代表执行依赖。
+4. 每个 Requirement 创建后由独立 worker 写入原生 acceptance-items 并 GET 核对；不同 Requirement 的子资源可以并发，同一 Requirement 的 PATCH/附件/评论按资源锁串行。
+5. 全部操作完成后再次 GET Room、所有 Requirement 和 `GET /api/v1/requirement-graph`，核对 Room 聚合、蓝图标记、归属、字段、验收项、附件和 Requirement 引用。图谱 `truncated=false` 才能作为完整图谱交付；引用边的 source/target 不代表依赖方向。
 
 预研结论尚未锁定、且结论会改变正文的下游提纲不创建 Requirement。待结论确认后生成新蓝图修订并重新走查重与写入授权，不在旧授权范围里补建。
 
-## 幂等恢复与部分成功
+## 上传器交接、并发与幂等恢复
+
+- 本文件生成的 manifest 交给 `workflow-upload`；上传器是唯一线上写入者。它以 `upload.concurrency`
+  默认 4、上限 8 的有界 worker pool 并发操作，按 `dependsOn` 和资源锁调度，不逐张卡串行上传。
+- Requirement direct edge 通过 `bindRequirementReference` 原生绑定，解除通过
+  `unbindRequirementReference`；每次都由 `getRequirementGraph` 按无序 UUID 对读回。原生引用是
+  无向关联，方向性依赖只来自 manifest 的 direct edge 与证据。
+- `auto` 在上传前只确认一次确切 bundle；`full` 在 ready 后自动上传，但 G1/G3/G4/G6/G7、环检测、
+  项目一致性、权限错误和写后读回不能绕过。并发度、已验证数量和失败数量必须记录在 checkpoint。
 
 - 每个写请求的检查点是“对象已 GET 读回，且子资源数量/内容已核对”。Requirement 已创建但验收项或附件缺失属于部分成功，只补缺失子资源，不重建 Requirement。
 - 网络错误、超时或 5xx 后，先用已知 UUID。没有 UUID 时：先走 `/search`（精确标题 + `scope=body` 搜蓝图标记，命中即确认已落库），未命中再走 Requirement/Room **列表分页**逐条比对描述里的蓝图标记与 Room 归属——搜索是投影、可能滞后于写入，不能因为「搜不到」就判定未落库。只有列表翻页也确认不存在才重发。

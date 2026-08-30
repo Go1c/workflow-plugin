@@ -2,19 +2,19 @@
 
 QA 结论只能以**三种追加**方式落地：description 末尾的 QA 块、新评论、新附件。原 description 正文、原附件、原评论一字不动（Q6）。
 
-调用姿势（鉴权、分页、multipart、读回）沿用 [workflow-ops 的 call-templates.md](../../workflow-ops/references/call-templates.md)，本文件只写 QA 特有的部分。
+调用姿势（鉴权、分页、multipart、读回）沿用 [workflow-ops 的 call-templates.md](../../workflow-ops/references/call-templates.md)，权限和本地 outbox 规则沿用 [permission-modes.md](../../workflow-ops/references/permission-modes.md) 与 [draft-format.md](../../workflow-ops/references/draft-format.md)，本文件只写 QA 特有的部分。
 
 ## 一、写入顺序（固定，每步读回）
 
 顺序不是风格问题：`resolution` 只有在条目**已处于终态**时才能设，提前写必 422；description 是读-改-写，不带并发校验就会盖掉别人的编辑。
 
-1. **上传证据附件** → 按 `(targetType, targetId)` 读回核对数量与归属。
-2. **`GET` 单据** → 取当前 `description` 原文与 `updatedAt`。
-3. **`PATCH` description**（原文 + QA 块，带 `expectedUpdatedAt` 与 `reason`）→ 读回核对**原文一字未变**、QA 块只有一份。
-4. **`POST` 评论** → 读回核对正文与目标单。
-5. **`GET` transitions** → 挑 `allowed=true` 且语义匹配的边 → **`POST` transition**（带 `reason`）→ 读回核对状态。
-6. **仅当条目已落终态且判定需要关单结论** → `PATCH` 写 `resolution` → 读回。
-7. **末次全量 `GET`** → 确认状态、QA 评论、附件、description 块四者都在。
+1. 把证据附件加入 bundle；上传后按 `(targetType, targetId)` 读回核对数量与归属。
+2. **`GET` 单据** → 取当前 `description` 原文与 `updatedAt`，把 CAS 快照写入操作。
+3. 把 **`PATCH` description**（原文 + QA 块，带 `expectedUpdatedAt` 与 `reason`）加入 bundle；上传后读回核对**原文一字未变**、QA 块只有一份。
+4. 把 **`POST` 评论**加入 bundle；上传后读回核对正文与目标单。
+5. **`GET` transitions** → 挑 `allowed=true` 且语义匹配的边 → 把 **`POST` transition**（带 `reason`）加入 bundle，上传后读回核对状态。
+6. **仅当条目已落终态且判定需要关单结论** → 把 `PATCH` 写 `resolution` 加入 bundle，再按顺序上传和读回。
+7. 上传器末次全量 `GET` → 确认状态、QA 评论、附件、description 块四者都在。
 
 任何一步失败：如实报**部分成功**，列清哪些落库、哪些没有，绝不声称整单已更新。
 

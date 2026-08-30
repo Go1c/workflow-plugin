@@ -6,7 +6,7 @@
 
 **Connect Claude Code, Cursor, and Codex to [Workflow](https://workflow.games) — requirements, bugs, tasks, status transitions, and live QA, all driven by your coding agent.**
 
-![version](https://img.shields.io/badge/version-0.6.0-2ea44f) ![skills](https://img.shields.io/badge/skills-8-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
+![version](https://img.shields.io/badge/version-0.7.0-2ea44f) ![skills](https://img.shields.io/badge/skills-10-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20contract%20as%20truth-orange) ![write](https://img.shields.io/badge/writes-read--back%20verified-red)
 
 [简体中文](./README.md) · **English**
 
@@ -18,7 +18,7 @@
 
 **The Workflow Agent Plugin connects AI coding agents — Claude Code, Cursor, and Codex — directly to [Workflow](https://workflow.games) (workflow.games), a project management platform for game development teams.** Once installed, the agent turns a one-line request into an executable delivery blueprint and files it, reports bugs with automatic deduplication, runs QA against your real production environment, and moves ticket status based on the verdict — and **every write must be verified by reading it back** before the agent is allowed to claim success.
 
-The plugin ships 8 skills, 7 slash commands, and 21 hard gates (G1–G7 for writes, Q1–Q7 for QA, F1–F7 for feedback). Its 102 automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
+The plugin ships 10 skills, 10 slash commands, and 21 hard gates (G1–G7 for writes, Q1–Q7 for QA, F1–F7 for feedback). Planning and write-backs first land in `.workflow-drafts/<bundleId>/`; dependency analysis and bounded concurrent upload are handled by dedicated skills with per-operation read-back. Automated tests treat the live OpenAPI contract as the source of truth and re-check for contract drift weekly. It follows the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification, is also installable as a Claude Code marketplace plugin, and is MIT licensed.
 
 ---
 
@@ -46,6 +46,18 @@ This plugin exists for all three. **It is not an "let the AI call the API" switc
 | `workflow-docs` | Answers questions by fetching live docs and the OpenAPI contract — **never from memory** |
 | `workflow-feedback` | **Files feedback to the Workflow platform team** — errors, poor UX, slowness, and missing features alike; collects only what you volunteered, requires verbatim confirmation before an anonymous submit, **never reads your token; the receipt is not a ticket** |
 | `workflow-update` | Version self-check, sha256 verification, safe self-update |
+| `workflow-dependencies` | Analyze upstream/downstream dependencies, complete direct edges, and report transitive/blocking chains with evidence |
+| `workflow-upload` | Upload local bundles with permission policies, bounded concurrency, idempotent recovery, and read-back verification |
+
+---
+
+### Requirement references and dependency direction
+
+Requirement associations use the native `references` API: `PUT /api/v1/requirements/{id}/references/{targetId}`
+to bind, `DELETE` to unbind, and `GET /api/v1/requirement-graph` to verify. The relation is undirected and
+idempotent; graph `source` / `target` are only a stable display order and do not mean upstream/downstream.
+`workflow-dependencies` remains authoritative for `upstream -> downstream` direct edges, transitive and blocking
+chains, and evidence. The uploader binds only direct edges and verifies the graph by unordered UUID pair.
 
 ---
 
@@ -76,7 +88,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 No account yet? Just tell the agent **"connect me to Workflow"** — `workflow-setup` walks you through registration, token creation, config, and verification.
 
-You get seven commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:take <ticket>`, `/workflow:qa <ticket>`, `/workflow:feedback <description>`, `/workflow:update`.
+You get ten commands: `/workflow:setup`, `/workflow:plan <description>`, `/workflow:bug <description>`, `/workflow:take <ticket>`, `/workflow:qa <ticket>`, `/workflow:deps <ticket-or-bundle>`, `/workflow:upload <bundle>`, `/workflow:policy <show|set>`, `/workflow:feedback <description>`, `/workflow:update`.
 
 ---
 

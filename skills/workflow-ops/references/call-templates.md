@@ -2,6 +2,10 @@
 
 > 模板只演示**调用姿势**（鉴权、分页、multipart、读回）。个别端点可能带 `/projects/{projectId}` 前缀或有新增必填字段；路径与字段拿不准时按 [connection.md](connection.md) 的真值分层处理。
 
+> **本地优先**：规划、建单、评论、附件和依赖先编码到 `.workflow-drafts/<bundleId>/manifest.json`，
+> 由 `workflow-upload` 统一上传。下面的单请求 curl 只用于展示合同形状；实际 bundle 上传采用默认
+> `concurrency=4`、上限 8 的有界 worker pool，独立操作可并发，不能把示例循环当成整批串行流程。
+
 ## 取凭证与验证连接
 
 **凭证三级解析、可直接抄的 shell 片段、`/me` 与 `/projects/current` 的分工、写操作三方一致性防呆，全部见 [connection.md](connection.md)。** 本文件不再重复，以免两处漂移。
@@ -145,6 +149,48 @@ curl -sS -X POST "$WORKFLOW_API_BASE/attachments" \
 ```
 
 上传后用列表端点按 `(targetType, targetId)` 读回确认；**后续列示用响应里返回的 `targetType`**（服务端会按目标真实类型归一）。
+
+## Requirement 引用与图谱
+
+Requirement 引用是无向、幂等关系；两个 UUID 必须属于当前项目且不能相同。接口由平台正式
+operationId `bindRequirementReference` / `unbindRequirementReference` / `getRequirementGraph`
+定义。绑定首次返回 201，重复绑定返回 200；解除存在或不存在都返回 204。
+
+```bash
+# operationId: bindRequirementReference
+curl -sS -X PUT "$WORKFLOW_API_BASE/requirements/<requirement-uuid>/references/<target-requirement-uuid>" \
+  -H "Authorization: Bearer $WORKFLOW_TOKEN"
+
+# operationId: unbindRequirementReference
+curl -sS -X DELETE "$WORKFLOW_API_BASE/requirements/<requirement-uuid>/references/<target-requirement-uuid>" \
+  -H "Authorization: Bearer $WORKFLOW_TOKEN"
+
+# operationId: getRequirementGraph
+curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
+  "$WORKFLOW_API_BASE/requirement-graph"
+```
+
+上传器只对依赖分析得到的 direct edge 调用绑定接口；图谱读回按无序 UUID 对查找
+`type=requirement_reference`。`source` / `target` 是稳定展示顺序，不代表 upstream/downstream
+方向；`truncated=true` 时可以确认已找到的边，但不能据此断言缺失或删除成功，完整图谱必须是
+`truncated=false`。
+
+## Bundle 并发上传模板
+
+manifest 的操作使用确定性 `opId` 与 `dependsOn`。调度器按拓扑把无前置操作放进最多 8 个
+worker；同一 `targetType + targetId` 取得资源锁，避免同一对象的 PATCH、评论和附件乱序。
+
+```text
+for wave in topologicalWaves(manifest.operations):
+  ready = operations whose dependsOn are all verified
+  run up to manifest.upload.concurrency workers in parallel
+  each worker: request -> retry with same idempotency key -> GET read-back -> checkpoint
+```
+
+节点创建读回 UUID 后，才可并发释放该节点的 acceptance-items、评论和附件；关系 Provider
+必须等待两端节点 `verified`。某 worker 失败时继续没有依赖它的操作，下游标记 `blocked`，并在
+`events.ndjson` 留下状态码、`traceId` 和重试次数。429 遇到 `Retry-After` 时降低并发并退避，
+不为提速跳过读回或全局查重。
 
 ## 读回验证
 

@@ -49,6 +49,11 @@
 4. **附件清单**：本地文件绝对路径 + 每个文件证明哪条验收项（调度方按清单上传后，评论正文里的文件名要能对上）。
 5. **Known gaps、遗留补单草稿与边界声明**：与评论正文一致地再列一遍；每条遗留 TODO / 降优先级项附一份按 [card-spec.md](../../workflow-ops/references/card-spec.md) 写好的补单草稿（标题 + 背景/目标/验收/边界四节，正文注明来源单），由调度方落单后把 displayKey 填回评论——调度方要据此决定是否流转、是否先退回。
 
+模式二还必须附上 **bundle 状态**：`bundleId`、`checkpoint`（`ready` / `pending upload` /
+`partial` / `complete`）、`concurrency`、已验证/失败/阻塞操作数和可恢复路径。依赖分析另列
+direct edge、传递链、当前阻塞链、Provider 与 `native` 状态；关系未上传或未读回时写“待上传”，
+不能把分析结果说成已建立关系。
+
 调度方代写时按 [execute-flow.md](execute-flow.md) 第七节的顺序执行并逐步读回；代写完成后把 displayKey + 链接 + 读回结果回给执行侧与用户留档（G3：没读回不说已回写）。
 
 ## 三、向用户交回（两种模式通用）

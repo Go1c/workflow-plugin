@@ -2,6 +2,43 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.0]
+
+把 Workflow 创单和写回从“对话里逐张调用 API”改为本地优先、可恢复、依赖感知的 bundle 上传流程，
+并接入平台正式发布的 Requirement 引用与关系图谱 API。
+
+### 新增
+
+- **Requirement 原生引用 Provider**：使用 `bindRequirementReference` / `unbindRequirementReference`
+  对应的 `PUT` / `DELETE /api/v1/requirements/{requirementId}/references/{targetRequirementId}`。
+  引用是当前项目内的无向、幂等 `references` 关系，首次绑定 201、重复绑定 200，解除存在或
+  不存在均 204。
+- **Requirement 图谱读回**：通过 `getRequirementGraph`（`GET /api/v1/requirement-graph`）核对
+  引用是否存在。图谱最多 300 个节点；`source` / `target` 只是无向边的稳定展示顺序，
+  `truncated=false` 才表示完整图谱。
+- **依赖与引用分工明确**：`workflow-dependencies` 继续维护 upstream → downstream 的方向、
+  传递链和阻塞链；原生 Requirement 引用只表达关联存在，不把无向图谱误解为方向性依赖。
+- **本地 outbox 协议**：规划、单卡需求、bug、任务、评论、附件、验收项、依赖和 execute/QA 写回
+  先保存到 `.workflow-drafts/<bundleId>/`，支持 checkpoint、部分成功与断点恢复。
+- **四种权限模式**：`plan`（只读/本地）、`manual`（逐组确认）、`auto`（默认，bundle 一次确认）、
+  `full`（ready 后自动上传）；项目 `.workflow-policy` 只能降权，不能提升到 `full`。
+- **依赖分析 skill 与 Provider**：自动补全上下游 direct edge，计算传递链和阻塞链，保留证据、置信度
+  和推断方式；WorkItem 使用现有 schedule relations，Requirement 使用原生无向 `references` API，
+  图谱读回不改变依赖方向语义。
+- **受控并发上传**：独立操作通过默认 4、上限 8 的有界 worker pool 并发执行；按 DAG 和资源锁调度，
+  每个操作独立幂等、重试、读回与 checkpoint，429 自动退避。
+- 新增 `/workflow:deps`、`/workflow:upload`、`/workflow:policy` 命令及对应合同测试。
+
+### 安全与兼容
+
+- 草稿目录加入忽略策略，更新插件不覆盖 `.workflow-policy` 或未完成 `.workflow-drafts/`。
+- 全局查重在草稿生成前和上传前各执行一次；命中已有单默认复用并追加评论，更新原单需明确授权。
+- `full` 仍不能绕过项目一致性、全局查重、环检测、权限错误、幂等恢复和写后读回；匿名反馈 F1–F7
+  与 QA Q1–Q7 不受权限模式影响。
+- 线上 OpenAPI 尚未同步新 operationId 时，合同测试按平台正式提示词校验补充契约并输出诊断；
+  其它未知路径仍然失败。
+- 旧版本已经写入的 `native=false` 评论引用不自动删除，只有用户明确要求清理时才处理。
+
 ## [0.6.1]
 
 修正 `workflow-update` 的渠道误判：插件有两条分发渠道，版本真值不是同一个——宿主托管安装（Claude Code marketplace）认公开仓的 `plugin.json`，手动安装（Codex / 官网脚本）认官网 `version.json`。旧正文让所有形态先读 `version.json` 再分流，官网清单一旦滞后于 marketplace 发布，宿主托管用户就会拿到「已是最新」的反向结论、永远升不上去（2026-08-29 实测：官网停在 0.3.0，marketplace 已发 0.6.0）。

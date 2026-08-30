@@ -50,6 +50,15 @@ surfaces = ["web"]
 
 `.workflow` 是独立文件，**绝不合并进 `config.toml`**——`config.toml` 的格式合同一个键都不能加（见分支 C 的写盘规则），`[qa]` 只属于 `.workflow`。
 
+## 权限模式策略
+
+读取 [workflow-ops/references/permission-modes.md](../workflow-ops/references/permission-modes.md)。
+权限不写入凭证文件：用户级策略在 `~/.config/workflow/policy.toml`，项目级降权覆盖在
+`.workflow-policy`。缺失时默认 `auto`；未知模式或策略解析失败时停止所有线上写入。向用户报告
+当前 profile、项目覆盖和最终生效模式；`full` 只能由用户级 profile 显式开启，项目文件不得升权。
+策略模式不等于 PAT scope，不以探测性 POST 验证权限。项目级 `.workflow-policy` 只能降权；本地
+`.workflow-drafts/` 是待上传 outbox，setup 和 token 配置流程不得覆盖、清理或上传其中内容。
+
 ## 分支 A — 用户还没有账号
 
 输出下面这份浏览器 checklist，并明说：**「这三步需要你在浏览器完成，做完回来告诉我」**。等待期间不轮询、不重复催。

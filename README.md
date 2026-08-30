@@ -6,7 +6,7 @@
 
 **把 Claude Code / Cursor / Codex 直接接进 [Workflow](https://workflow.games) —— 需求、缺陷、任务、状态流转、线上验收，全部由 Agent 自己跑完。**
 
-![version](https://img.shields.io/badge/version-0.6.0-2ea44f) ![skills](https://img.shields.io/badge/skills-8-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
+![version](https://img.shields.io/badge/version-0.7.0-2ea44f) ![skills](https://img.shields.io/badge/skills-10-blue) ![spec](https://img.shields.io/badge/Agent%20Plugins-1.0.0-8b5cf6) ![API](https://img.shields.io/badge/API-OpenAPI%20%E5%90%88%E5%90%8C%E7%9C%9F%E5%80%BC-orange) ![write](https://img.shields.io/badge/%E5%86%99%E6%93%8D%E4%BD%9C-%E5%85%A8%E9%87%8F%E8%AF%BB%E5%9B%9E%E9%AA%8C%E8%AF%81-red)
 
 **简体中文** · [English](./README.en.md)
 
@@ -18,7 +18,7 @@
 
 **Workflow Agent 插件把 Claude Code、Cursor、Codex 等 AI 编码 Agent 直接接入 [Workflow](https://workflow.games)（workflow.games）项目管理平台。** 装好之后，AI Agent 能把一句话需求拆成可执行的开发蓝图并落单、带查重地记录缺陷、在真实线上环境跑测验收，并按判定流转工单状态 —— 且**每一次写入都必须读回验证**才允许声称成功。
 
-插件包含 8 个技能、7 个斜杠命令、21 条硬闸门（G1–G7 落单闸门、Q1–Q7 QA 闸门与 F1–F7 反馈闸门），102 项自动化测试以线上 OpenAPI 合同为真值、每周校验一次合同漂移。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
+插件包含 10 个技能、10 个斜杠命令、21 条硬闸门（G1–G7 落单闸门、Q1–Q7 QA 闸门与 F1–F7 反馈闸门），以线上 OpenAPI 合同为真值的自动化测试并每周校验合同漂移。规划和所有写回默认先落 `.workflow-drafts/<bundleId>/`，依赖分析与受控并发上传由专用 skill 处理。遵循 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范，同时兼容 Claude Code marketplace，MIT 许可。
 
 ---
 
@@ -62,6 +62,18 @@ Agent 十分钟改完三个模块，然后你打开 PM 系统，一条记录都�
 | 📖 `workflow-docs` | 答疑：现抓线上文档和 OpenAPI 合同回答，**不凭记忆瞎编** |
 | 📣 `workflow-feedback` | **向平台方反馈问题与建议** —— 报错、体验不佳、卡慢、缺失功能都能报；只收集你主动提供的信息、发送前逐字确认、匿名提交，**不读 token、回执不是正式单** |
 | 🔄 `workflow-update` | 自检版本、校验 sha256、安全自更新 |
+| 🧩 `workflow-dependencies` | 自动分析上下游依赖，补全 direct edge、传递链和阻塞链，保留证据与置信度 |
+| ⬆️ `workflow-upload` | 从本地 bundle 按权限模式受控并发上传、幂等恢复并逐项读回 |
+
+---
+
+### 需求引用与依赖方向
+
+Requirement 之间的关联通过原生 `references` API 建立：`PUT /api/v1/requirements/{id}/references/{targetId}`
+绑定、`DELETE` 解除，并用 `GET /api/v1/requirement-graph` 读回。该关系是无向且幂等的；图谱里的
+`source` / `target` 只是稳定展示顺序，不代表谁依赖谁。`workflow-dependencies` 仍维护
+`upstream → downstream` 的 direct edge、传递链、阻塞链和证据，上传器只绑定 direct edge，并按无序
+UUID 对验证图谱结果。
 
 ---
 
@@ -92,7 +104,7 @@ curl -fsSL https://workflow.games/plugin/install.sh | bash
 
 没有账号也不要紧 —— 装完直接对 Agent 说 **「接入 Workflow」**，`workflow-setup` 一步步带你走完注册、建 token、写配置、验证连接。
 
-装好即得七个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:take <单号>`、`/workflow:qa <单号>`、`/workflow:feedback <描述>`、`/workflow:update`。
+装好即得十个命令：`/workflow:setup`、`/workflow:plan <描述>`、`/workflow:bug <描述>`、`/workflow:take <单号>`、`/workflow:qa <单号>`、`/workflow:deps <单号或草稿>`、`/workflow:upload <bundle>`、`/workflow:policy <show|set>`、`/workflow:feedback <描述>`、`/workflow:update`。
 
 ---
 

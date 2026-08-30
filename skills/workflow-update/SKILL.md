@@ -70,4 +70,6 @@ https://workflow.games/plugin/version.json?cb=<当前 epoch 秒>
 - **只从 `workflow.games` 域下载**。清单里出现任何其他域的地址 → 中止并告警。
 - 技能包只应包含 **`.md` 与 `VERSION` 纯文本**。清单或下载内容里发现可执行文件（`.sh`、二进制等）→ **立即中止并告警**，不安装。
 - 宿主托管形态（第 2 节）**不下载任何文件**——它只调用宿主自己的命令，下载与落盘都由宿主负责。
-- 更新**绝不触碰** `~/.config/workflow/config.toml`——凭证与插件更新无关。
+- 更新**绝不触碰** `~/.config/workflow/config.toml`——凭证与插件更新无关；同样不得覆盖或删除
+  项目的 `.workflow-policy`、`.workflow-drafts/`（包括未完成的本地 bundle）。更新插件后若发现
+  草稿协议 schema 需要迁移，先备份并由 `workflow-upload` 按 checkpoint 迁移，不能静默丢弃草稿。
