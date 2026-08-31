@@ -111,6 +111,16 @@ describe("执行流程纪律", () => {
     assert.match(flow, /不硬凑并行/);
   });
 
+  test("旧单未完成时优先消费接口，无法解耦才阻塞", () => {
+    assert.match(skill, /接口已存在但上游实现未完成时可以按接口\/stub 并行/);
+    assert.match(skill, /readiness=conditional.*blocked/);
+    assert.match(skill, /`basis=interface`.*版本化接口\/公共产物可引用/);
+    assert.match(skill, /`basis=implementation`.*前置未满足/);
+    assert.match(flow, /旧单未完成但本卡已有版本化接口时.*并行/);
+    assert.match(flow, /接口引用缺失、版本漂移/);
+    assert.match(flow, /`basis=implementation` 且只能等最终实现、理由成立时才阻塞/);
+  });
+
   test("开工必先流转：现查 transitions，被 guard 挡住转述不硬闯", () => {
     assert.match(skill, /不流转就开工/);
     assert.match(flow, /\/transitions/);

@@ -104,6 +104,13 @@ test("按独立交付拓扑拆单，并按变更类型选择质量路径", () =>
   assert.match(skill, /预研.*Requirement/);
   assert.match(skill, /下游此时只生成条件化提纲.*不得落单/);
   assert.match(skill, /预研结束.*递增蓝图修订号.*重新取得写入授权/);
+  assert.match(skill, /接口先行与 AI 并行审查/);
+  assert.match(skill, /消费卡准备标为可执行时没有版本化、可引用的合同/);
+  assert.match(skill, /接口未清只能保留条件化草稿/);
+  assert.match(skill, /尚未冻结时被标为 `ready` 或列入上传清单/);
+  assert.match(skill, /普通消费边（`basis=interface`）.*`basis=implementation`/);
+  assert.match(skill, /不修改历史 bundle/);
+  assert.match(skill, /最长依赖链.*最大可并行 wave/);
 
   const process = read("skills/workflow-planning/references/planning-process.md");
   assertHeadingsInOrder(process, [
@@ -120,6 +127,11 @@ test("按独立交付拓扑拆单，并按变更类型选择质量路径", () =>
   assert.match(process, /不得制造无关失败或伪造测试输出/);
   assert.match(process, /没有可自动化测试缝/);
   assert.match(process, /没有代码就不创建空的 TDD 或 Code Review 卡/);
+  assert.match(process, /总需求\/Room.*公共接口\/产出.*可并行执行卡.*收尾联调\/验收卡/);
+  assert.match(process, /增量 bundle.*不修改旧 bundle/);
+  assert.match(process, /旧单未完成但接口已冻结时.*并行/);
+  assert.match(process, /longestChainCards/);
+  assert.match(process, /parallelWidth/);
 });
 
 test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆盖层", () => {
@@ -145,6 +157,12 @@ test("执行提示词具备 Agent 权限边界、验证证据与游戏研发覆�
   assert.match(template, /不得撤销其他 Agent\/成员的改动/);
   assert.match(template, /不得声称未实际执行的验证通过/);
   assert.match(template, /与 Workflow 结构化验收项一一对应/);
+  assert.match(template, /前置产物\(接口\)/);
+  assert.match(template, /前置产物\(必须等待实现\)/);
+  assert.match(template, /conditional.*ready.*blocked/);
+  assert.match(template, /无外部接口.*待冻结.*本单合同/);
+  assert.match(template, /接口冻结物已存在且可引用\(单号\/版本/);
+  assert.match(template, /交付给收尾联调\/验收卡/);
 
   // 覆盖层是「索引 + 每层一个文件」：断言结构与可达性，不断言正文措辞。
   const index = read("skills/workflow-planning/references/discipline-overlays.md");

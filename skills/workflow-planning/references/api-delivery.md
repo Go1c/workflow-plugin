@@ -8,9 +8,9 @@
 
 1. 为每次规划生成稳定的 `bundleId`，按 [draft-format.md](../../workflow-ops/references/draft-format.md)
    写入 manifest、每张卡、附件索引、查重快照和依赖分析；目录放在 `.workflow-drafts/<bundleId>/`。
-2. 在上下文不足、网络不可用或用户暂不想上传时，停在 `ready`，向用户交付 bundle 路径、摘要、
-   依赖 DAG 和待上传数量；不强迫逐张线上创建。新会话可用 `/workflow:upload <bundleId>` 从
-   checkpoint 继续，不依赖原始对话。
+2. 在上下文不足、网络不可用或用户暂不想上传时，停在 `checkpoint.phase=ready`，向用户交付
+   bundle 路径、摘要、依赖 DAG、可上传/保留/阻塞数量；该阶段值不表示每张卡都可上传。新会话
+   可用 `/workflow:upload <bundleId>` 从 checkpoint 继续，不依赖原始对话。
 3. bundle 中只保存获用户提供或模型推断的结构化数据，不保存 token。依赖边、重复处置和每个
    写操作都必须有 evidence、confidence、inferenceMethod 与确定性 `opId`。
 4. `plan` 模式永远停在本地；`manual`、`auto`、`full` 的上传授权、并发度和安全闸门由
@@ -50,7 +50,7 @@
 
 ## Requirement Room 写入
 
-1. 把 Room、`[原始需求]` Requirement、可执行 Requirement、验收项、附件和 Room PATCH 编码为带依赖的 manifest 操作；不显式归档。
+1. 把 Room、`[原始需求]` Requirement、`readiness=ready` 的可执行 Requirement、验收项、附件和 Room PATCH 编码为带依赖的 manifest 操作；conditional 卡只保留草稿，blocked 卡只允许补记可解析的关系，不显式归档。
 2. 上传器先创建并读回 Room，再并发创建同一 wave 中无前置的 Requirement；每个节点读回 UUID/displayKey 后才释放其验收项、附件和下游节点。
 3. 渲染正文时，把临时前置编号替换为已读回的真实 displayKey、标题与链接；同 wave 无前置的卡顺序不代表执行依赖。
 4. 每个 Requirement 创建后由独立 worker 写入原生 acceptance-items 并 GET 核对；不同 Requirement 的子资源可以并发，同一 Requirement 的 PATCH/附件/评论按资源锁串行。

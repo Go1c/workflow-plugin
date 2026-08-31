@@ -12,13 +12,17 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
 
 ## 上传顺序
 
-1. 校验 manifest、卡片、附件、策略快照和操作 DAG；`plan` 模式在此停止。
+1. 校验 manifest、卡片、附件、策略快照、操作 DAG 和规划审查；`plan` 模式在此停止。规划 bundle
+   按节点 `readiness` 过滤：`conditional` 或 `blocked` 节点的创建/更新操作留在草稿，不因同 bundle
+   中存在这些节点而阻塞其它 `ready` 节点；bundle 级 audit 状态只作汇总报告。
 2. 按 connection 规则验证 `/me`、`/projects/current` 和三方项目一致性。
 3. 在任何 POST/PATCH/PUT/DELETE 前重新执行项目级全局搜索；search 未命中仍须翻列表到空。
 4. 精确 marker/UUID 自动幂等复用；已有单默认追加结构化评论。只有 manifest 明确 `update`
    且授权时才 PATCH 原正文，并带 `expectedUpdatedAt`。
-5. 按依赖拓扑创建 Room、需求、WorkItem/bug 和其它节点；独立 wave 进入并发队列，真实共享
-   热点与有前置的操作必须等待前置完成。不要把依赖边当成可并行提示。
+5. 按依赖拓扑创建 Room、需求、WorkItem/bug 和其它节点；新蓝图先创建总需求/公共接口，
+   再把接口已满足且拥有范围互斥的 `ready` 卡放入同一并发 wave，最后释放收尾卡。增量 bundle
+   只创建本次新增对象或关系，不修改历史 manifest。真实共享热点与实现前置操作必须等待对应
+   的就绪条件；接口边只等待冻结合同/公共产物可引用。不要把依赖边当成可并行提示。
 6. 解析真实 UUID/displayKey/deepLink 后创建验收项、评论和附件；不同目标之间可并发，最后
    通过 Provider 写入直接边。Requirement direct edge 调用原生
    `bindRequirementReference`，再用 `getRequirementGraph` 读回；图谱中的引用边是无向的，
@@ -51,7 +55,20 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
 - `manual`：每个操作组展示 endpoint、目标、字段 diff 和关系 metadata，逐组确认。
 - `full`：草稿 ready 后自动进入本流程，不询问，但仍执行所有安全闸门、受控并发和读回。
 
-授权只绑定当前 manifest digest；内容、项目、数量或关系集合变化即重新计算并重新授权。
+授权只绑定当前 manifest digest；内容、项目、数量、关系集合或规划审查结果变化即重新计算并重新授权。
+
+## 规划状态与增量依赖
+
+- `readiness=conditional` 的卡只能作为草稿保存；接口、公共产出或决策冻结后重新分析，
+  再将它晋级为 `ready`。`readiness=blocked` 的卡只保留阻塞对象、理由和解除条件，不进入
+  执行队列。
+- planning 节点只有 `readiness=ready` 时，上传器才可派工；`checkpoint.phase` 和
+  `analysis.audit.status` 不替代节点门控。非 planning 的 ops/execute 写回节点缺省
+  `readiness` 时，按操作自身状态和依赖调度。
+- 旧单未完成但接口已存在时，新增消费卡只引用接口，不等待旧单实现。接口和可拆出的公共
+  产出都不存在时，当前 bundle 可以补写远端关系并报告阻塞，但不得启动消费卡。
+- 关系写入仍通过 Provider；Requirement 的原生引用是无向事实，依赖方向、接口消费说明和
+  阻塞理由以 manifest 与卡正文为准。历史 bundle 不因新增依赖而回写。
 
 ## 失败恢复
 

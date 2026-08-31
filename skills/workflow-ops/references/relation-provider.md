@@ -14,7 +14,8 @@ removeEdge(edge)        # 支持删除时提供
 端点。若平台返回 Provider edge ID 就记录它；平台未声明 edge ID 时，`edgeId` 使用本地稳定的
 无序端点键（Requirement 为排序后的 UUID 对，WorkItem 为远端 `relationId`）。metadata 至少包含
 `edgeId`、`bundleId`、`classification`、`confidence`、`evidence`、`inferenceMethod`、`native`
-和 `directional`。Provider 不得把传递边展开成重复写入。
+和 `directional`；规划侧还应保留 `basis`，实现前置边保留 `reason` 和 `unblockCondition`。
+Provider 不得把传递边展开成重复写入。
 
 ## 当前映射
 
@@ -91,7 +92,7 @@ direct edge 和原生 `requirement_reference` 的读回结果；不能把图谱�
 ## 关系操作的标准写入序列
 
 解析双方 UUID -> 校验同项目、非自引用和 canonical 格式 -> 生成稳定 `opId` -> 按权限模式将
-引用操作加入 bundle -> 调用绑定/解除端点 -> `GET /requirement-graph` 读回核对无序 UUID 对、
+引用操作加入当前 bundle（增量依赖不修改历史 bundle） -> 调用绑定/解除端点 -> `GET /requirement-graph` 读回核对无序 UUID 对、
 关系类型和截断标志 -> 记录 remote edge 与 ChangeSet/Event（若响应或 activity 可见）。409/网络
 错误先读图谱确认，不盲目重发；重复绑定接受 200，重复解除接受 204。
 

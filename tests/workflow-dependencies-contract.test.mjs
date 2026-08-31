@@ -34,7 +34,12 @@ describe("Workflow 依赖分析合同", () => {
     }
     assert.match(model, /upstream -> downstream/);
     assert.match(skill, /自环、环、孤儿或跨项目引用/);
-    assert.match(skill, /状态判定使用 workflow 返回的[\s\S]{0,40}`semantic` 与 `isTerminal`/);
+    assert.match(skill, /implementation 边才使用 workflow 返回的[\s\S]{0,80}`semantic`、`isTerminal`/);
+    assert.match(model, /`basis`.*`interface`.*`implementation`/);
+    assert.match(model, /`basis=interface`[\s\S]*上游实现状态未完成不构成阻塞/);
+    assert.match(model, /`basis=implementation`[\s\S]*`semantic`、`isTerminal`/);
+    assert.match(model, /reason.*unblockCondition/);
+    assert.match(model, /历史 bundle.*不回写/);
   });
 
   test("依赖分析与上传、查重时序接通", () => {
@@ -44,6 +49,9 @@ describe("Workflow 依赖分析合同", () => {
     assert.match(search, /上传前/);
     assert.match(orchestration, /relation-provider\.md/);
     assert.match(orchestration, /依赖分析与前置核对/);
+    assert.match(skill, /longestChainCards/);
+    assert.match(skill, /parallelWidth/);
+    assert.match(skill, /增量 bundle/);
   });
 
   test("Provider 使用正式 Requirement 引用端点，不误解无向图谱", () => {

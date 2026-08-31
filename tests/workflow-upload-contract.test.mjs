@@ -39,6 +39,8 @@ describe("Workflow bundle 上传合同", () => {
     assert.match(calls, /topologicalWaves/);
     assert.match(calls, /targetType \+ targetId.*资源锁/);
     assert.match(calls, /关系 Provider\n必须等待两端节点 `verified`/);
+    assert.match(skill, /新蓝图先创建总需求\/公共接口/);
+    assert.match(skill, /增量 bundle[\s\S]{0,80}不修改历史 manifest/);
   });
 
   test("每个 worker 独立幂等、重试、读回和 checkpoint", () => {
@@ -65,7 +67,7 @@ describe("Workflow bundle 上传合同", () => {
     assert.match(skill, /`manual`.*逐组确认/);
     assert.match(skill, /`full`.*草稿 ready 后自动/);
     assert.match(command, /PlanMode 禁止上传/);
-    assert.match(command, /Auto 只做一次 bundle 确认/);
+    assert.match(command, /Auto 只做一次\s+bundle 确认/);
     assert.match(command, /全部授权自动执行/);
   });
 
@@ -74,5 +76,22 @@ describe("Workflow bundle 上传合同", () => {
     assert.match(skill, /getRequirementGraph/);
     assert.match(skill, /图谱中的引用边是无向的/);
     assert.match(skill, /truncated=true/);
+  });
+
+  test("规划审查决定可执行资格，条件化与阻塞卡不派工", () => {
+    assert.match(skill, /规划审查/);
+    assert.match(skill, /规划 bundle[\s\S]*节点 `readiness` 过滤/);
+    assert.match(skill, /bundle 级 audit 状态只作汇总报告/);
+    assert.match(skill, /readiness=conditional/);
+    assert.match(skill, /readiness=blocked/);
+    assert.match(skill, /planning 节点只有 `readiness=ready`/);
+    assert.doesNotMatch(skill, /planning\.auditStatus/);
+    assert.doesNotMatch(skill, /只有 `status=ready`/);
+    assert.match(draft, /planning\.context/);
+    assert.match(draft, /`planning` 是规划 bundle 的可选元数据块/);
+    assert.match(draft, /new_blueprint/);
+    assert.match(draft, /incremental/);
+    assert.match(draft, /audit/);
+    assert.doesNotMatch(draft, /standardVersion/);
   });
 });

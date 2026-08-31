@@ -20,6 +20,8 @@
 
 ## manifest 最小字段
 
+`planning` 是规划 bundle 的可选元数据块；ops/execute 写回可以省略，不参与上传门控。
+
 ```json
 {
   "schemaVersion": 1,
@@ -27,6 +29,9 @@
   "project": { "profile": "my-project", "projectId": null, "host": null },
   "policy": { "mode": "auto", "source": "default", "digest": "..." },
   "source": { "kind": "plan", "revision": "r1", "createdAt": "..." },
+  "planning": {
+    "context": "new_blueprint"
+  },
   "upload": {
     "concurrency": 4,
     "maxConcurrency": 8,
@@ -42,12 +47,43 @@
 }
 ```
 
-节点使用稳定的 `localId`；操作使用确定性的 `opId`，并记录 `kind`、目标 localId、前置
+节点使用稳定的 `localId`；planning bundle 中的每个可上传节点必须显式记录
+`readiness=conditional | ready | blocked`、`contractRefs` 和实际拥有范围。非 planning 的
+ops/execute 写回节点可以省略 `readiness`，按操作自身状态和依赖调度。操作使用确定性的 `opId`，并记录 `kind`、目标 localId、前置
 操作、请求摘要、状态、远端 UUID/displayKey 和 `requestDigest`。操作状态为
 `pending | in_flight | succeeded | verified | failed | blocked`。
 
-边使用 [dependency-model.md](../../workflow-dependencies/references/dependency-model.md) 的结构。manifest 只保存直接边；完整
-传递链由分析结果计算，不把传递边重复写入 API。
+边使用 [dependency-model.md](../../workflow-dependencies/references/dependency-model.md) 的结构，
+并保存 `basis=interface | implementation`。manifest 只保存直接边；完整传递链由分析结果
+计算，不把传递边重复写入 API。`implementation` 边必须带不可解耦的 `reason` 和
+`unblockCondition`，仅用于收尾/联调、发布或迁移等真实顺序。
+
+`planning.context=new_blueprint` 表示一个总需求/Room 的新拆解，通常包含公共接口、可并行
+执行卡和收尾卡；`planning.context=incremental` 表示后续新增卡或关系，只引用已有远端单据，
+不回写历史 bundle。bundle 是本地 outbox，不默认作为 Workflow 附件；上传完成后单据与关系
+是长期真相。
+
+## 规划审查结果
+
+同一 bundle 的 `analysis.json` 增加 `audit` 对象：
+
+```json
+{
+  "audit": {
+    "status": "<conditional | ready | blocked>",
+    "checks": [],
+    "longestChainCards": 2,
+    "parallelWidth": 2,
+    "longestChainPath": ["C", "A"]
+  }
+}
+```
+
+`status=conditional` 表示接口或决策仍未锁定，`status=blocked` 表示存在不能绕过的真实
+实现前置；两者都可以继续保存和讨论。这里的 `status` 只是分析汇总，不是上传门。上传器
+按节点 `readiness` 过滤：planning 节点只有 `readiness=ready` 才能执行创建/更新，
+`conditional`、`blocked` 节点留在草稿；非 planning 写回节点按操作自身状态处理。只补记已有
+单据之间的关系可以使用增量 bundle，但仍须通过项目一致性、环检测、证据和读回检查。
 
 ## 生命周期
 
