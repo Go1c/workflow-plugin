@@ -84,13 +84,13 @@ UUID 对验证图谱结果。
 **Agent Plugins 客户端**（Cursor / Codex / Copilot / VS Code / Kiro …）
 
 ```bash
-npx plugins add Go1c/workflow-plugin
+npx plugins add LumioGames/workflow-plugin
 ```
 
 **Claude Code**
 
 ```bash
-/plugin marketplace add Go1c/workflow-plugin
+/plugin marketplace add LumioGames/workflow-plugin
 /plugin install workflow@workflow-plugin
 ```
 
@@ -260,7 +260,7 @@ surfaces = ["web"]
 | 安装方式 | 怎么更新 |
 | :-- | :-- |
 | Claude Code（marketplace） | `claude plugin marketplace update workflow-plugin` + `claude plugin update workflow@workflow-plugin --scope user`（更新后需重启会话）；也支持 autoUpdate 自动升级或在 `/plugin` 界面手动更新 |
-| Agent Plugins 客户端 | 重跑一次 `npx plugins add Go1c/workflow-plugin` |
+| Agent Plugins 客户端 | 重跑一次 `npx plugins add LumioGames/workflow-plugin` |
 | Codex / 手动安装 | 对 Agent 说「更新 workflow 插件」—— 查线上版本 → 逐文件校验 sha256 → 备份旧版 → 就位 |
 
 自更新只从 `workflow.games` 域下载，技能包只允许 `.md` 与 `VERSION` 纯文本 —— **清单里出现任何可执行文件，立即中止并告警。**
@@ -286,7 +286,7 @@ surfaces = ["web"]
 
 ### Workflow Agent 插件支持哪些 AI 编码工具？
 
-支持 Claude Code、Cursor、Codex，以及任何实现 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范的客户端（Copilot、VS Code、Kiro 等）。Claude Code 走 marketplace 安装；Agent Plugins 客户端用 `npx plugins add Go1c/workflow-plugin`；Codex 与手动安装走安装脚本。
+支持 Claude Code、Cursor、Codex，以及任何实现 [Agent Plugins 1.0.0](https://agent-plugins.org/) 规范的客户端（Copilot、VS Code、Kiro 等）。Claude Code 走 marketplace 安装；Agent Plugins 客户端用 `npx plugins add LumioGames/workflow-plugin`；Codex 与手动安装走安装脚本。
 
 ### 这个插件和 MCP server 有什么区别？
 
@@ -326,7 +326,7 @@ Workflow Agent 插件是**技能包（skills），不是 MCP server**。插件�
 
 ### 这个插件开源吗？用什么许可？
 
-开源，MIT 许可，源码在 [github.com/Go1c/workflow-plugin](https://github.com/Go1c/workflow-plugin)。技能包只允许包含 Markdown 与 `VERSION` 纯文本文件 —— 自更新时清单里出现任何可执行文件会立即中止并告警。
+开源，MIT 许可，源码在 [github.com/LumioGames/workflow-plugin](https://github.com/LumioGames/workflow-plugin)。技能包只允许包含 Markdown 与 `VERSION` 纯文本文件 —— 自更新时清单里出现任何可执行文件会立即中止并告警。
 
 ---
 

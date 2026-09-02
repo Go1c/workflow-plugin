@@ -147,7 +147,7 @@
 - **专业覆盖层改为索引 + 按需读取**。`discipline-overlays.md` 变成 18 行选择表，正文拆到 `references/overlays/*.md`；每张卡只读自己的主覆盖层。覆盖层部分单次加载 8966 → 4109 字节（-54%），也不再让 17 个不相关角色定义污染上下文。
 - **新增 `workflow-ops/references/connection.md`** 作为 setup / ops / docs / planning 共用的连接与真值单一真相源。凭证三级解析原本在三个文件里逐字重复，L1/L2/L3 阶梯重复两份。
 - **真值规则改为按漂移速度分层**。原先声称「不内嵌任何端点快照、每次调用前现查」，却内嵌了 7 个端点和 3 套枚举，且 L3 合同实测 393KB 不可能每次整读。改为：path/operationId 可依赖已核对写法；必填字段与固定枚举以 422 的 ProblemDetails 为准修正一次；项目自定义域（工作流状态、验收类型、成员、缺陷自定义字段）必须现查。
-- **改造为 [Agent Plugins 1.0.0](https://agent-plugins.org/) 插件包：仓库根即插件根。** `plugins/workflow/` 下的 `skills/`、`commands/` 与 `.claude-plugin/plugin.json` 全部上移到仓库根，新增符合规范的根 `plugin.json`（封闭 schema，必填 `$schema` + `name`）与 `LICENSE`。Agent Plugins 的分发地址就是仓库 URL（`npx plugins add Go1c/workflow-plugin`），插件根埋在子目录里就装不了。
+- **改造为 [Agent Plugins 1.0.0](https://agent-plugins.org/) 插件包：仓库根即插件根。** `plugins/workflow/` 下的 `skills/`、`commands/` 与 `.claude-plugin/plugin.json` 全部上移到仓库根，新增符合规范的根 `plugin.json`（封闭 schema，必填 `$schema` + `name`）与 `LICENSE`。Agent Plugins 的分发地址就是仓库 URL（`npx plugins add LumioGames/workflow-plugin`），插件根埋在子目录里就装不了。
   - 两套格式**共存而非二选一**：Agent Plugins 读根 `plugin.json`，Claude Code 读 `.claude-plugin/plugin.json`，同名不同文件、不同 schema。marketplace 的 `source` 改为 `"./"`（官方支持的 marketplace-root 形态），Claude Code 安装路径不受影响。
   - `commands/` 不在规范 v1 的组件类型内，保持在插件根供 Claude Code 读取；Agent Plugins 客户端按 §11.3 忽略不认识的组件类型，不影响合规。
   - `workflow-update` 的宿主分流判据同步更新——原判据「路径含 `plugins/`」扁平化后恒不成立，会把宿主托管的安装误判成手动安装去自改目录。

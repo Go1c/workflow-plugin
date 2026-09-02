@@ -68,13 +68,13 @@ This repository is simultaneously an **[Agent Plugins 1.0.0](https://agent-plugi
 **Agent Plugins clients** (Cursor, Codex, Copilot, VS Code, Kiro, …)
 
 ```bash
-npx plugins add Go1c/workflow-plugin
+npx plugins add LumioGames/workflow-plugin
 ```
 
 **Claude Code**
 
 ```bash
-/plugin marketplace add Go1c/workflow-plugin
+/plugin marketplace add LumioGames/workflow-plugin
 /plugin install workflow@workflow-plugin
 ```
 
@@ -205,7 +205,7 @@ surfaces = ["web"]
 | Install method | How to update |
 | :-- | :-- |
 | Claude Code (marketplace) | `claude plugin marketplace update workflow-plugin` + `claude plugin update workflow@workflow-plugin --scope user` (restart the session afterwards); autoUpdate and the `/plugin` UI also work |
-| Agent Plugins client | Re-run `npx plugins add Go1c/workflow-plugin` |
+| Agent Plugins client | Re-run `npx plugins add LumioGames/workflow-plugin` |
 | Codex / manual | Tell the agent "update the workflow plugin" — checks the published version, verifies sha256 per file, backs up the old version, installs |
 
 Self-update downloads only from the `workflow.games` domain, and the skill package may contain only `.md` and `VERSION` plain-text files — **any executable in the manifest aborts the update with a warning.**
@@ -216,7 +216,7 @@ Self-update downloads only from the `workflow.games` domain, and the skill packa
 
 ### Which AI coding tools does the Workflow Agent Plugin support?
 
-Claude Code, Cursor, and Codex, plus any client implementing the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification (Copilot, VS Code, Kiro, and others). Claude Code installs via marketplace, Agent Plugins clients via `npx plugins add Go1c/workflow-plugin`, and Codex via the install script.
+Claude Code, Cursor, and Codex, plus any client implementing the [Agent Plugins 1.0.0](https://agent-plugins.org/) specification (Copilot, VS Code, Kiro, and others). Claude Code installs via marketplace, Agent Plugins clients via `npx plugins add LumioGames/workflow-plugin`, and Codex via the install script.
 
 ### How is this different from an MCP server?
 
@@ -252,7 +252,7 @@ No. `workflow-feedback` uses a public anonymous endpoint: it **reads no Workflow
 
 ### Is the plugin open source, and under what license?
 
-Yes — MIT licensed, source at [github.com/Go1c/workflow-plugin](https://github.com/Go1c/workflow-plugin). The skill package is restricted to Markdown and `VERSION` plain-text files, and the self-updater aborts if any executable appears in the manifest.
+Yes — MIT licensed, source at [github.com/LumioGames/workflow-plugin](https://github.com/LumioGames/workflow-plugin). The skill package is restricted to Markdown and `VERSION` plain-text files, and the self-updater aborts if any executable appears in the manifest.
 
 ---
 
