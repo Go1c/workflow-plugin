@@ -44,13 +44,24 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 - **UUID 是 canonical id**：路由与写命令一律用 UUID；单号只做展示与搜索，不当 id 传参。
 - 错误一律 RFC 7807 ProblemDetails（带 `traceId`）；列表普遍 cursor 分页；写端点在项目冻结时返回 423。
 
+## 写路径（硬规则）
+
+批量落卡、建单、归属里程碑时按这六条做，不要另发明合同：
+
+1. 建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）。网络错误或响应不完整直接同键同体重发：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。
+2. 建单响应只取 `id` / `displayKey`（`jq`），不依赖回显的 `description`。
+3. 找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`，命中即真值；看室内清单用 `GET /requirements?roomId=&view=summary`。
+4. 预检看 `membership.moduleAccess`：建需求要 `requirements ≥ edit`，归属里程碑要 `milestones ≥ manage`；不看 `permissions`。
+5. `PUT /schedule/requirements/{id}/milestone` 回 `204` 即成功；要核对读 `GET /schedule/snapshot` 的 `milestones[].requirementIds`。
+6. `deepLink` 是相对路径，拼 `https://<subdomain>.workflow.games`。
+
 ## 动词分节
 
 - **建需求 / 建任务** → 先生成 `POST /requirements` 或 `POST /work-items` 操作，不立即发送。**硬性口径见 [references/card-spec.md](references/card-spec.md)：裸标题不落库**（正文至少「背景 / 目标 / 验收 / 边界」四节），**建单前按 [references/search.md](references/search.md) 查重**并记录复用、追加评论或授权更新处置。**不传 `status`**——恒落绑定工作流的初始态。
 - **记 bug** → 先读同目录 `references/bug-fields.md` 对齐字段口径；建单前查重同上，疑似重复默认记录评论复用操作；用户只说「记一下」就只记录——**不启动修复，不扩写成开发任务**。同样**不传 `status`**，用户没给的字段一律不替他填。
 - **建需求室** → `POST /rooms`（`name` 必填且 ≤ 80 字符）；批量收纳既有单 `POST /rooms/{roomId}/objects`。盘点一个 Room 的状态、验收完成度与证据评论 → 按 [references/orchestration.md](references/orchestration.md) 第四节。
-- **里程碑** → `POST /schedule/milestones`（`title` + `targetOn` 必填；**不传 `status`**——由关联需求进度派生）；把需求归属到里程碑 → `PUT /schedule/requirements/{requirementId}/milestone`（`reason` 必填；需求侧单选，归属新的自动解除旧的）。
-- **查询 / 搜索** → 搜索能力与「先搜后翻页」纪律见 [references/search.md](references/search.md)（`/search` 支持标题+正文召回与 cursor 分页）；列表 `GET /work-items` / `GET /requirements` 带过滤参数 **cursor 循环取全量**：短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。
+- **里程碑** → `POST /schedule/milestones`（`title` + `targetOn` 必填；**不传 `status`**——由关联需求进度派生）；把需求归属到里程碑 → `PUT /schedule/requirements/{requirementId}/milestone`（`reason` 必填；需求侧单选，归属新的自动解除旧的；`204` 即成功，核对读 `GET /schedule/snapshot`）。
+- **查询 / 搜索** → 搜索能力见 [references/search.md](references/search.md)。找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`（命中即真值）；看室内清单用 `GET /requirements?roomId=&view=summary`。列表短页不是终点，`nextCursor` 为空串才是；游标原样回传不自拼。
 - **读单** → 按 [references/read-card.md](references/read-card.md)：正文 + **评论列表** + **附件列表**（+ 需求单的验收项），缺一路不算读过；历史决策查 activity。
 - **指派 / 改字段** → `PATCH /work-items/{id}`，带 `reason` 写明变更理由；省略的字段不改动。
 - **状态流转** → **先 `GET` transitions**（`/work-items/{id}/transitions` 或 `/requirements/{id}/transitions`，两条路径均已按合同核实）看可用动作与 `allowed`，把选定动作写入 bundle 后由上传器 **POST** 执行；不硬 `PATCH status`——项目可配自定义工作流，状态词表不是固定枚举。
@@ -64,11 +75,11 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
   `bindRequirementReference`（无向 `references`）；上传后用 `getRequirementGraph` 读回。图谱
   的 `source/target` 不代表方向，依赖方向仍由本地 upstream/downstream 模型维护。
 
-读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接（`https://<子域>.workflow.games/...`，优先用读回响应或搜索结果里的 deepLink）。
+读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接。`deepLink` 是相对路径，拼 `https://<子域>.workflow.games<deepLink>`（优先用读回响应或搜索结果里的 deepLink）。
 
 ## 失败处置
 
-按 [connection.md](references/connection.md) 的失败处置表执行（422 / 401 / 403 / 409 / 423 / 429 / 5xx）。最容易出事的一条：**网络错误或 5xx 之后必须先查询确认是否已落库，确认未落库才可重发**——这是重复建单的头号来源。
+按 [connection.md](references/connection.md) 的失败处置表执行（422 / 401 / 403 / 409 / 423 / 429 / 5xx）。最容易出事的一条：**建单类 POST 必须带 `Idempotency-Key`；网络错误或 5xx 之后同键同体重发**（`201`/`200` 都算成功）——这是重复建单的头号来源，不要靠翻全量列表证明未落库。
 
 ## 收尾
 
