@@ -18,12 +18,15 @@
 curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
   --data '{
     "title":"战斗结算面板",
     "description":"## 背景\n…\n\n## 目标\n…\n\n## 验收\n- …\n\n## 边界\n…",
     "reason":"按用户指令建单"
-  }'
+  }' | jq '{id, displayKey}'
 ```
+
+建单类 POST **一律**带 `Idempotency-Key`（UUID，一个业务动作一个键）。网络错误或响应不完整直接同键同体重发：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
 
 ## 记 bug（字段口径见 bug-fields.md）
 
@@ -31,30 +34,32 @@ curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
 curl -sS -X POST "$WORKFLOW_API_BASE/work-items" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
   --data '{
     "title":"结算页负责人显示为原始 id",
     "description":"现象：…\n期望：…\n证据：…\n仅记录 bug，不启动修复。",
     "type":"bug","priority":"P1",
     "reason":"线上反馈记录，不启动修复"
-  }'
+  }' | jq '{id, displayKey}'
 ```
 
 **不传 `status`**：后端按项目绑定的工作流落初始态；显式传的值要过该工作流的合法状态集校验，硬写 `todo` 在改过初始态名的项目上必 422。`severity` 同理——用户没评估就不传，别默认 `major`（见 bug-fields.md）。
 
 ## 查重 / 搜索
 
-**能力口径、必搜场景与模板全部见 [search.md](search.md)**——`/search` 已支持标题+摘要+正文召回、`types`/`scope`/`status` 过滤与 cursor 分页；「不存在证明」仍以列表翻页为准。本文件不再重复，以免两处漂移。
+**能力口径、必搜场景与模板全部见 [search.md](search.md)**——找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`，命中即真值；看室内清单用 `GET /requirements?roomId=&view=summary`。本文件不再重复，以免两处漂移。
 
-## 列表取全量（cursor 循环）
+## 室内清单（cursor 循环，`view=summary`）
 
-**空 `nextCursor` 才是终点，短页不是。** 循环骨架：
+看一个需求室里有哪些需求，用 `view=summary` 裁掉 `description`。**空 `nextCursor` 才是终点，短页不是。** 找已存在的卡不要走这条路，走 `/search`。
 
 ```bash
 CURSOR=""
 while :; do
   RESP=$(curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
-    --get --data-urlencode "limit=250" ${CURSOR:+--data-urlencode "cursor=$CURSOR"} \
-    "$WORKFLOW_API_BASE/work-items")
+    --get --data-urlencode "roomId=<room-uuid>" --data-urlencode "view=summary" \
+    --data-urlencode "limit=250" ${CURSOR:+--data-urlencode "cursor=$CURSOR"} \
+    "$WORKFLOW_API_BASE/requirements")
   echo "$RESP" | python3 -c 'import sys,json;[print(i["displayKey"],i["title"]) for i in json.load(sys.stdin)["items"]]'
   CURSOR=$(echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["nextCursor"])')
   [ -z "$CURSOR" ] && break
@@ -116,17 +121,24 @@ curl -sS -X POST "$WORKFLOW_API_BASE/comments" \
 # Room：name ≤ 80、description ≤ 2000、module ≤ 80（字符语义，中文一个字算一个）
 curl -sS -X POST "$WORKFLOW_API_BASE/rooms" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" -H "content-type: application/json" \
-  --data '{"name":"战斗结算改版","description":"<共同目标与范围>"}'
+  -H "Idempotency-Key: $(uuidgen)" \
+  --data '{"name":"战斗结算改版","description":"<共同目标与范围>"}' | jq '{id, displayKey}'
 
 # 里程碑：title + targetOn 必填；不传 status（由关联需求进度自动派生）
 curl -sS -X POST "$WORKFLOW_API_BASE/schedule/milestones" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" -H "content-type: application/json" \
-  --data '{"title":"结算改版集成","kind":"integration","targetOn":"2026-09-30","reason":"按用户指令创建"}'
+  -H "Idempotency-Key: $(uuidgen)" \
+  --data '{"title":"结算改版集成","kind":"integration","targetOn":"2026-09-30","reason":"按用户指令创建"}' | jq '{id, displayKey}'
 
 # 把需求归属到里程碑（需求侧单选，归属新的自动解除旧的；reason 必填）
-curl -sS -X PUT "$WORKFLOW_API_BASE/schedule/requirements/<uuid>/milestone" \
+# 预检：membership.moduleAccess.milestones ≥ manage。HTTP 204 = 成功（无响应体）。
+curl -sS -o /dev/null -w '%{http_code}\n' -X PUT "$WORKFLOW_API_BASE/schedule/requirements/<uuid>/milestone" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" -H "content-type: application/json" \
   --data '{"milestoneId":"<milestone-uuid>","reason":"纳入结算改版集成节点"}'
+
+# 核对归属：读 snapshot，不把 204 当成失败
+curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
+  "$WORKFLOW_API_BASE/schedule/snapshot" | jq '.milestones[] | {id, title, requirementIds}'
 ```
 
 ## 评论
@@ -135,6 +147,7 @@ curl -sS -X PUT "$WORKFLOW_API_BASE/schedule/requirements/<uuid>/milestone" \
 curl -sS -X POST "$WORKFLOW_API_BASE/comments" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
   --data '{"targetType":"bug","targetId":"<uuid>","body":"复现步骤补充：冷启动必现"}'
 ```
 

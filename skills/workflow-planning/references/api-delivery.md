@@ -25,9 +25,9 @@
 
 ## 只读预检与写入闸门
 
-1. 解析 profile 后调用 `/me` 核对用户身份，再调用 `/projects/current` 核对项目 UUID/名称、`project.subdomainPrefix`、membership 角色权限与 `publicDemo`；membership 不含 PAT scope，scope 未知时不得宣称写权限已验证，也不得用探测性写入验证。多 profile 且当前目录未绑定时，暂停候选落单并转 `workflow-setup`；写入 `.workflow` 需要它自己的明确授权，不属于蓝图写入授权。绑定完成后从头重跑预检，绝不静默使用默认项目。
-2. 为蓝图生成并固定一个不含敏感信息的 `blueprintId` 和修订号。Room 与 Requirement 描述都保留可搜索标记 `workflow-plan: <blueprintId>/rN/<临时编号>`，用于审计和幂等恢复。
-3. 查重两步走（口径见 [workflow-ops 的 search.md](../../workflow-ops/references/search.md)）：先 `/search` 初筛——已支持标题+正文召回（`scope=body` 可直接搜描述里的蓝图标记）与 cursor 分页；但**放行判定（确认不存在）必须穷尽读取 Room 与 Requirement 列表**（cursor 走到 `nextCursor` 为空）逐条比对精确标题、高相似标题和描述里的蓝图标记——搜索走投影，合同不承诺写入即刻可见。逐个 GET 核对 Room 归属、内容和 `updatedAt`；疑似重复由用户决定复用、补写、更新还是另建，Agent 不自行覆盖。需要编排元数据（批次/轨道/依赖）时按 [orchestration.md](../../workflow-ops/references/orchestration.md) 的口径编码，不发明字段。
+1. 解析 profile 后调用 `/me` 核对用户身份，再调用 `/projects/current` 核对项目 UUID/名称、`project.subdomainPrefix`、`publicDemo` 与 **`membership.moduleAccess`**。预检可写性看 `moduleAccess`，不看 `permissions`：建需求要 `requirements ≥ edit`，归属里程碑要 `milestones ≥ manage`。PAT 的 `moduleAccess` 已与 token scope 求交，`read_only` 六模块全是 `read`。不得用探测性写入验证。多 profile 且当前目录未绑定时，暂停候选落单并转 `workflow-setup`；写入 `.workflow` 需要它自己的明确授权，不属于蓝图写入授权。绑定完成后从头重跑预检，绝不静默使用默认项目。
+2. 为蓝图生成并固定一个不含敏感信息的 `blueprintId` 和修订号。Room 与 Requirement 描述都保留可搜索标记 `workflow-plan: <blueprintId>/rN/<临时编号>`，用于审计和幂等恢复。建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）；网络错误或响应不完整直接同键同体重发，`201`/`200` 都算成功。建单响应只取 `id` / `displayKey`，不依赖回显的 `description`。
+3. 查重口径见 [workflow-ops 的 search.md](../../workflow-ops/references/search.md)：找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`（`scope=body` 可搜描述里的蓝图标记），**命中即真值**。看室内清单用 `GET /requirements?roomId=&view=summary`。不要为了证明「不存在」去翻带完整 `description` 的全量列表。逐个 GET 核对拟复用对象的 Room 归属、内容和 `updatedAt`；疑似重复由用户决定复用、补写、更新还是另建，Agent 不自行覆盖。需要编排元数据（批次/轨道/依赖）时按 [orchestration.md](../../workflow-ops/references/orchestration.md) 的口径编码，不发明字段。
 4. `GET /projects/{projectId}/acceptance/types`（`projectId` 取自 `/projects/current`），选择与蓝图语义匹配的 active 类型及 `systemSemantic=not_started` 的 active 初始状态；创建验收项时 `statusId` 必填，`acceptanceTypeId` 随之确定。存在多个会改变报表口径的候选时，在写入确认前让用户决定，不按名称猜。
 5. **字段长度按字符（rune）算，中文一个字算一个**：Room `name` ≤ 80、`description` ≤ 2000、`module` ≤ 80，超限 422。生成 Room 名和描述时先自检长度——描述要同时装共同目标、蓝图标记、交付轨道和后续 PATCH 追加的 displayKey 与链接，2000 字符要留出余量，装不下的内容放 `[原始需求]` 正文而不是硬塞进 Room 描述。
 6. Requirement 指定 owner 时，从当前项目成员读模型按稳定 ID 核对；姓名/邮箱匹配不唯一就让用户决定。未指定时明确展示“API 将采用创建人默认”，不得静默把责任角色当成成员 ID。
@@ -46,7 +46,7 @@
 2. 用户提供本地原始文件时只登记路径和 sha256，上传器在获授权后上传到该 Requirement；只有 URL 的来源保留链接，不擅自下载转存。
 3. 上传器按依赖就绪条件执行操作。独立节点、验收项和附件可受控并发，单个 Requirement 的互相竞争更新按资源锁串行。
 4. 每个 POST/PATCH/附件请求都由上传器立即 GET 读回；验收项使用 `sourceKind=ai`、蓝图标记作为 `sourceRef`，列出 acceptance-items 和 attachments，核对字段、顺序、归属和数量。
-5. 停止；不创建 WorkItem，不流转状态，不进入代码或资产制作。
+5. 停止；不创建 WorkItem，不流转状态，不进入代码或资产制作。归属里程碑时 `PUT /schedule/requirements/{id}/milestone` 回 `204` 即成功；核对读 `GET /schedule/snapshot` 的 `milestones[].requirementIds`。交付链接把相对 `deepLink` 拼到 `https://<子域>.workflow.games`。
 
 ## Requirement Room 写入
 
@@ -69,7 +69,7 @@
   项目一致性、权限错误和写后读回不能绕过。并发度、已验证数量和失败数量必须记录在 checkpoint。
 
 - 每个写请求的检查点是“对象已 GET 读回，且子资源数量/内容已核对”。Requirement 已创建但验收项或附件缺失属于部分成功，只补缺失子资源，不重建 Requirement。
-- 网络错误、超时或 5xx 后，先用已知 UUID。没有 UUID 时：先走 `/search`（精确标题 + `scope=body` 搜蓝图标记，命中即确认已落库），未命中再走 Requirement/Room **列表分页**逐条比对描述里的蓝图标记与 Room 归属——搜索是投影、可能滞后于写入，不能因为「搜不到」就判定未落库。只有列表翻页也确认不存在才重发。
+- 网络错误、超时或 5xx 后，先用已知 UUID。没有 UUID 时：**同键同体重发**（`Idempotency-Key`）；`201`/`200` 都算成功。还没有键时，先走 `/search`（精确标题 + `scope=body` 搜蓝图标记，**命中即确认已落库**）。不得以 search 未命中作为未落库的唯一依据；没带幂等键时用室内 `view=summary` 列表核对，不要翻带完整 `description` 的全量列表。
 - 已读回成功的对象不得重建。从 DAG 中第一个缺失对象或缺失子资源继续；不得为了伪装原子性删除用户可见 PM 数据。
 - 409 先重新读取并报告并发变化；不得覆盖。422 按 ProblemDetails 修正一次，第二次仍失败就停止并报告 `traceId`。401/403、423、429 和网络/5xx 完整遵循 `workflow-ops` 失败表。
 - 重试前重新核对目标项目；上下文、profile 或 Host 变化立即停止。创建范围因恢复判断发生变化时，再向用户确认新增写操作。

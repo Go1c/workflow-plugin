@@ -9,7 +9,7 @@ description: 首次接入 Workflow（workflow.games）、还没有账号或 API 
 
 `GET $WORKFLOW_API_BASE/me` 返回 200，且 `GET $WORKFLOW_API_BASE/projects/current` 返回 200；从前者读用户，从后者读 `project` 与 `membership`，再向用户报告：**「以 <用户名> 连接到项目 <项目>，角色 <角色>」**。没走到这一步，接入就不算完成——中间任何分支做完都要回到这条验证。
 
-这只证明身份、项目和角色连接正确，不证明 PAT scope 可写；`membership.permissions` 是角色侧权限。不要为了测试 scope 创建或修改业务对象，真正写操作若返回 403 再按权限分诊。
+这只证明身份、项目和角色连接正确。预检可写性看 `membership.moduleAccess`（PAT 已按 token scope 求交），**不看** `permissions`。`read_only` 六模块全是 `read`；`scopeMode=all` 与角色相同。不要为了测试 scope 创建或修改业务对象，真正写操作若返回 403 再按权限分诊。
 
 ## Step 0 — 静默探测（每次都先做，不问用户）
 
@@ -122,7 +122,7 @@ EOF
 - **`/projects/current` 204** → API Host 是中央面/运营面，不是项目子域；修正 profile 的 `base_url` 后重试。
 - **`/projects/current` 404** → Host 指向的项目不存在或尚未开通；核对子域前缀和项目状态。
 - **`/projects/current` 返回的 `project.subdomainPrefix` ≠ profile 的 `base_url` 子域或目标项目** → 凭证、Host 与目录绑定打架：先问用户要在哪个项目干活；改 `.workflow` 指向正确 profile，或为目标项目走分支 B/C 补一枚 token，绝不带着错绑定继续写数据。
-- **`membership.permissions` 不含目标动作权限或 `publicDemo=true`** → 当前连接只读或角色受限；报告实际角色/权限并请项目管理员调整，不绕过服务端权限。
+- **`membership.moduleAccess` 达不到目标动作，或 `publicDemo=true`** → 当前连接只读或角色 / token 受限。建需求要 `requirements ≥ edit`，归属里程碑要 `milestones ≥ manage`。报告实际 `moduleAccess`，请项目管理员调整角色或换 `scopeMode=all` 的 token；**不看** `permissions`，不绕过服务端权限。
 - **config 里多个 profile、当前目录又没有 `.workflow`** → 歧义，不得静默挑一个：问用户「这个目录绑哪个项目」，答后写 `.workflow` 再继续。
 - **`.workflow` 存在但解析不出 profile** → 停止并回显该文件内容，让用户改成 `profile = "<名>"`（双引号、不带行内注释）；期间不得回落全局 `current_profile`。
 - **域名解析失败** → 回显 `base_url` 让用户核对子域前缀拼写。

@@ -2,6 +2,12 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复与改进
+
+- **Agent 写路径**：建单类 POST 一律带 `Idempotency-Key`（同键重发 `201`/`200` 都算成功）；建单响应只取 `id` / `displayKey`；找已有卡用 `/search?q=&roomId=`（命中即真值），室内清单用 `view=summary`；预检看 `membership.moduleAccess` 不看 `permissions`；归属里程碑 `204` 即成功，核对读 `GET /schedule/snapshot`；`deepLink` 是相对路径。
+
 ## [0.8.0]
 
 收口规划蓝图的接口先行规则与本地 bundle 上传门控，避免消费卡因上游实现状态被错误阻塞，或因混合审查状态整批误上传。

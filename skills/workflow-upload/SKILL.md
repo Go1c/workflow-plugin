@@ -15,8 +15,8 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
 1. 校验 manifest、卡片、附件、策略快照、操作 DAG 和规划审查；`plan` 模式在此停止。规划 bundle
    按节点 `readiness` 过滤：`conditional` 或 `blocked` 节点的创建/更新操作留在草稿，不因同 bundle
    中存在这些节点而阻塞其它 `ready` 节点；bundle 级 audit 状态只作汇总报告。
-2. 按 connection 规则验证 `/me`、`/projects/current` 和三方项目一致性。
-3. 在任何 POST/PATCH/PUT/DELETE 前重新执行项目级全局搜索；search 未命中仍须翻列表到空。
+2. 按 connection 规则验证 `/me`、`/projects/current` 和三方项目一致性。预检看 `membership.moduleAccess`，不看 `permissions`。
+3. 在任何 POST/PATCH/PUT/DELETE 前重新执行项目级搜索：`GET /search?q=<标记>&roomId=<室>` **命中即真值**。search 未命中不得当成「不存在」的唯一依据；室内清单用 `view=summary`，不要翻带完整 `description` 的全量列表。建单类 POST 必须带确定性 `Idempotency-Key`。
 4. 精确 marker/UUID 自动幂等复用；已有单默认追加结构化评论。只有 manifest 明确 `update`
    且授权时才 PATCH 原正文，并带 `expectedUpdatedAt`。
 5. 按依赖拓扑创建 Room、需求、WorkItem/bug 和其它节点；新蓝图先创建总需求/公共接口，
@@ -72,7 +72,7 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
 
 ## 失败恢复
 
-网络错误或 5xx 后先通过列表/详情确认是否已落库；已验证的操作不重建。409 重新读取并
+网络错误或 5xx 后，建单类 POST **同键同体重发**（`201`/`200` 都算成功）。没有幂等键时再通过 search / 室内 `view=summary` 确认是否已落库；已验证的操作不重建。409 重新读取并
 报告并发变化；422 依据 ProblemDetails 修正一次；401/403/423/429 按 connection 处置。
 任何部分成功、关系图谱读取被裁剪、环或跨项目引用都保留 bundle 并报告准确状态；图谱
 `truncated=true` 时不得声称缺失边已删除或图谱完整。

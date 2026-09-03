@@ -65,10 +65,10 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 **写操作防呆**（建单/改单/流转/评论/附件之前逐条核对）：
 
 - `/projects/current` 的 `project.subdomainPrefix` 必须与实际 API Host **以及** `.workflow` 所选 profile 的 `base_url` 子域三方一致。
-- `membership.permissions` 必须包含本次动作所需的角色权限。
+- 预检看 `membership.moduleAccess`，**不看** `permissions`。建需求要 `requirements ≥ edit`，把需求归属到里程碑要 `milestones ≥ manage`。PAT 请求的 `moduleAccess` 已与 token scope 求交：`read_only` 六模块全是 `read`，`scopeMode=all` 与角色相同。
 - 不一致或 `publicDemo=true` → 停下转 workflow-setup 重新绑定/分诊，**绝不把数据写进错误项目**。
 
-`membership.permissions` **不包含当前 PAT 的 scope**，不能单独证明 token 可写；scope 未知时如实说明，绝不靠探测性写入验证，实际写端点返回 403 仍按权限问题停止。
+`membership.permissions` 是角色原值，**不含**当前 PAT 的 scope，不能当预检。实际写端点返回 403 仍按权限问题停止；绝不靠探测性写入验证 scope。
 
 ## 三、真值分层（哪些能记、哪些必须现查）
 
@@ -97,7 +97,7 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/projects
 | 409 | 并发冲突：重新读取并报告变化，**不得覆盖** |
 | 423 | 项目已冻结，**不重试**，转告用户找管理员解冻 |
 | 429 | 限流 per-token（约 60 突发 / 120 每分钟）；按 `Retry-After` 退避重试**至多 3 次**，并降低后续调用频率 |
-| 网络错误 / 5xx | **必须先查询确认是否已落库**（search 或列表），确认未落库才可重发——防重复建单 |
+| 网络错误 / 5xx | 建单类 POST 已带 `Idempotency-Key` 时**直接同键同体重发**：`201` = 新建，`200` = 重放，都算成功。没带键才先 `/search` 确认是否已落库，未命中不得当成未落库的唯一依据 |
 
 **疑似平台自身问题**：按上表处置后仍稳定 500/503、实际行为与合同明显不符、或接口持续异常缓慢时，不要替平台往当前项目里记 bug，也不要无限重试——建议用户走 **workflow-feedback** 向平台方匿名反馈，附上 ProblemDetails 的 `traceId` 与 operationId。体验不佳、缺失功能之类的建议同样可走该通道。
 

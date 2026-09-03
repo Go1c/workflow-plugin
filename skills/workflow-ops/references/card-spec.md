@@ -32,12 +32,15 @@
 curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
   --data '{
     "title":"战斗结算面板",
     "description":"## 背景\n…\n\n## 目标\n…\n\n## 验收\n- …\n\n## 边界\n…",
     "reason":"按用户指令建单"
-  }'
+  }' | jq '{id, displayKey}'
 ```
+
+建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
 
 ## 三、验收项落结构化（条件触发）
 
@@ -48,7 +51,7 @@ curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
 - `title`：写用户能识别的现象或成果，不写内部实现猜测。
 - **不传 `status`**——后端按绑定工作流落初始态（与 bug 同一纪律）。
 - `priority` / `risk` / `ownerId`：用户说了才填（后端缺省 P1 / medium / 创建人）；成员名 → UUID 按合同现查成员端点，解析不到就留空并说明。
-- `roomId` / 里程碑：用户点名才归属。里程碑归属是建单读回后的第二步：`PUT /schedule/requirements/<uuid>/milestone`（`reason` 必填，需 manage_schedule 权限）。
+- `roomId` / 里程碑：用户点名才归属。里程碑归属是建单读回后的第二步：`PUT /schedule/requirements/<uuid>/milestone`（`reason` 必填；预检 `membership.moduleAccess.milestones ≥ manage`；`204` 即成功，核对读 `GET /schedule/snapshot` 的 `milestones[].requirementIds`）。
 - `module` / `category`：先看项目既有取值（列表或同室单据里现查）对齐惯例；没有惯例就留空，**不发明新词表**。
 
 ## 五、建单前查重

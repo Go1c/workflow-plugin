@@ -201,9 +201,12 @@ describe("共享纪律：搜索先行（search.md）", () => {
     assert.match(searchRef, /上限 50/);
   });
 
-  test("「不存在证明」只认列表翻页，search 未命中不算数", () => {
+  test("「不存在证明」不以 search 未命中为唯一依据；命中即真值", () => {
     assert.match(searchRef, /「搜不到」≠「不存在」/);
     assert.match(searchRef, /不得以 search 未命中作为未落库的唯一依据/);
+    assert.match(searchRef, /命中即真值/);
+    assert.match(searchRef, /view=summary/);
+    assert.match(searchRef, /Idempotency-Key/);
   });
 
   test("旧的「只搜标题」口径已从全部技能里清除", () => {
@@ -250,6 +253,27 @@ describe("共享纪律：建单最小正文（card-spec.md）", () => {
   test("ops 建单动词绑定 card-spec 为硬性口径", () => {
     assert.match(opsSkill, /card-spec\.md/);
     assert.match(opsSkill, /裸标题不落库/);
+  });
+});
+
+describe("共享纪律：Agent 写路径", () => {
+  test("六条规则写进 ops / setup / 落单路径", () => {
+    const connection = read("skills/workflow-ops/references/connection.md");
+    const setup = read("skills/workflow-setup/SKILL.md");
+    const delivery = read("skills/workflow-planning/references/api-delivery.md");
+    const calls = read("skills/workflow-ops/references/call-templates.md");
+    for (const text of [opsSkill, connection, setup, delivery]) {
+      assert.match(text, /moduleAccess/);
+      assert.match(text, /不看.*permissions|不看 `permissions`/);
+    }
+    for (const text of [opsSkill, callTemplates, cardSpec, delivery]) {
+      assert.match(text, /Idempotency-Key/);
+    }
+    assert.match(opsSkill, /命中即真值/);
+    assert.match(searchRef, /命中即真值/);
+    assert.match(callTemplates, /schedule\/snapshot/);
+    assert.match(opsSkill, /204/);
+    assert.match(opsSkill, /deepLink.*相对路径|相对路径.*deepLink/);
   });
 });
 
