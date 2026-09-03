@@ -2,7 +2,9 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.8.1]
+
+教会 Agent 用平台已有的写路径能力，避免批量落卡时靠翻全量列表或看角色 `permissions` 预检。
 
 ### 修复与改进
 
