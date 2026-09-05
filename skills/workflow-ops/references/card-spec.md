@@ -32,7 +32,7 @@
 curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{
     "title":"战斗结算面板",
     "description":"## 背景\n…\n\n## 目标\n…\n\n## 验收\n- …\n\n## 边界\n…",
@@ -40,7 +40,7 @@ curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   }' | jq '{id, displayKey}'
 ```
 
-建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
+建单类 POST 一律带 `Idempotency-Key`（`$IDEMPOTENCY_KEY` 取自 manifest，发出前落盘；禁止现场 `$(uuidgen)`）。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
 
 ## 三、验收项落结构化（条件触发）
 

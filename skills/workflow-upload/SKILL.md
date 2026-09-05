@@ -16,7 +16,7 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
    按节点 `readiness` 过滤：`conditional` 或 `blocked` 节点的创建/更新操作留在草稿，不因同 bundle
    中存在这些节点而阻塞其它 `ready` 节点；bundle 级 audit 状态只作汇总报告。
 2. 按 connection 规则验证 `/me`、`/projects/current` 和三方项目一致性。预检看 `membership.moduleAccess`，不看 `permissions`。
-3. 在任何 POST/PATCH/PUT/DELETE 前重新执行项目级搜索：`GET /search?q=<标记>&roomId=<室>` **命中即真值**。search 未命中不得当成「不存在」的唯一依据；室内清单用 `view=summary`，不要翻带完整 `description` 的全量列表。建单类 POST 必须带确定性 `Idempotency-Key`。
+3. 在任何 POST/PATCH/PUT/DELETE 前重新执行项目级搜索：`GET /search?q=<标记>&roomId=<室>` **命中即真值**。search 未命中不得当成「不存在」的唯一依据；室内清单用 `view=summary`，不要翻带完整 `description` 的全量列表。建单类 POST 必须带 manifest 已落盘的确定性 `idempotencyKey`（作 `Idempotency-Key` 头）；缺键不得发出。
 4. 精确 marker/UUID 自动幂等复用；已有单默认追加结构化评论。只有 manifest 明确 `update`
    且授权时才 PATCH 原正文，并带 `expectedUpdatedAt`。
 5. 按依赖拓扑创建 Room、需求、WorkItem/bug 和其它节点；新蓝图先创建总需求/公共接口，
@@ -27,7 +27,7 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
    通过 Provider 写入直接边。Requirement direct edge 调用原生
    `bindRequirementReference`，再用 `getRequirementGraph` 读回；图谱中的引用边是无向的，
    依赖方向仍以 manifest 的 upstream/downstream 为准。
-7. 每个写操作后立即 GET 读回，更新 checkpoint 和 events.ndjson。完整完成才清理 bundle。
+7. 每个写操作后立即 GET 读回，更新 checkpoint 和 events.ndjson。全部操作结束后无条件做全量数量对账：相关列表翻页到 `nextCursor` 为空，本批标题各恰好 1 条且条数 == 预期，出现标题重复即失败——不得只核对「你以为建的那张」。完整完成才清理 bundle。
 
 ## 受控并发上传（默认开启）
 
@@ -42,8 +42,8 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
   不同 UUID 对可以并发。`manual` 只确认关系组，不逐边询问。
 - 创建节点必须先完成并读回，再释放其子资源；关系操作必须等待两端 UUID 都已读回。一个 wave
   中的失败不会阻塞没有依赖它的其它操作（继续执行没有依赖它的操作），但依赖它的操作保持 `blocked`，不能越过 DAG。
-- 并发请求仍各自使用确定性的幂等 key、超时和重试上限；429 按 `Retry-After` 降低并发或退避，
-  423/401/403/409/422 按共享失败表处理。不得因为并发而重复发送或复用别的操作的 key。
+- 并发请求仍各自使用已落盘、确定性的幂等 key、超时和重试上限；没有落盘幂等键不得重发。写操作默认不重试；只有同键同体才允许对账重放。429 按 `Retry-After` 降低并发或退避，
+  423/401/403/409/422 与响应读取失败按共享失败表处理。不得因为并发而重复发送、换新键或复用别的操作的 key。不得把 POST 与 GET 包进同一套 except → retry。
 - 每次请求完成（成功、失败或被阻塞）都原子更新 manifest checkpoint 和 `events.ndjson`；进程
   中断后只恢复未 `verified` 的操作。读回必须在 worker 内完成，不能先宣称整批成功再补读。
 - 输出和收尾报告同时列 `concurrency`、已完成/失败/阻塞数量、每个操作的读回结果；部分成功
@@ -72,7 +72,10 @@ description: 将 Workflow 本地草稿按权限模式、全局查重、依赖拓
 
 ## 失败恢复
 
-网络错误或 5xx 后，建单类 POST **同键同体重发**（`201`/`200` 都算成功）。没有幂等键时再通过 search / 室内 `view=summary` 确认是否已落库；已验证的操作不重建。409 重新读取并
-报告并发变化；422 依据 ProblemDetails 修正一次；401/403/423/429 按 connection 处置。
-任何部分成功、关系图谱读取被裁剪、环或跨项目引用都保留 bundle 并报告准确状态；图谱
+写操作默认不重试。create 类 POST 没有落盘幂等键不得重发、也不得发出。响应读取失败
+（IncompleteRead / chunked 截断 / 超时无完整响应体）按「请求可能已送达」对账：有键则同键同体
+对账重放（`201`/`200` 都算成功），没键则只读列表/详情。不得把 POST 与 GET 包进同一套
+except → retry。已验证的操作不重建。409 重新读取并报告并发变化；422 依据 ProblemDetails
+修正一次；401/403/423/429 按 connection 处置。
+任何部分成功、关系图谱读取被裁剪、环或跨项目引用、全量数量对账发现标题重复都保留 bundle 并报告准确状态；图谱
 `truncated=true` 时不得声称缺失边已删除或图谱完整。

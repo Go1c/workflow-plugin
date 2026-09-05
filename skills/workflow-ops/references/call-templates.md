@@ -15,10 +15,12 @@
 ## 建需求（正文口径见 card-spec.md：裸标题不落库）
 
 ```bash
+# $IDEMPOTENCY_KEY 只能从已落盘的 manifest.operations[].idempotencyKey 拷出。
+# 发送前禁止 IDEMPOTENCY_KEY=$(uuidgen) 或任何现场生成。
 curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{
     "title":"战斗结算面板",
     "description":"## 背景\n…\n\n## 目标\n…\n\n## 验收\n- …\n\n## 边界\n…",
@@ -26,7 +28,7 @@ curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
   }' | jq '{id, displayKey}'
 ```
 
-建单类 POST **一律**带 `Idempotency-Key`（UUID，一个业务动作一个键）。网络错误或响应不完整直接同键同体重发：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
+建单类 POST **一律**带 `Idempotency-Key`。`$IDEMPOTENCY_KEY` 取自 manifest `operations[].idempotencyKey`（UUID v5，name = `bundleId + ":" + opId`），发出前必须落盘。禁止 `IDEMPOTENCY_KEY=$(uuidgen)` 以及在这条 curl 里写 `$(uuidgen)`——重试会换新键，等于关掉幂等。写操作默认不重试；响应读取失败按「请求可能已送达」对账，有键才同键同体重放：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。响应只取 `id` / `displayKey`，不依赖回显的 `description`。
 
 ## 记 bug（字段口径见 bug-fields.md）
 
@@ -34,7 +36,7 @@ curl -sS -X POST "$WORKFLOW_API_BASE/requirements" \
 curl -sS -X POST "$WORKFLOW_API_BASE/work-items" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{
     "title":"结算页负责人显示为原始 id",
     "description":"现象：…\n期望：…\n证据：…\n仅记录 bug，不启动修复。",
@@ -121,13 +123,13 @@ curl -sS -X POST "$WORKFLOW_API_BASE/comments" \
 # Room：name ≤ 80、description ≤ 2000、module ≤ 80（字符语义，中文一个字算一个）
 curl -sS -X POST "$WORKFLOW_API_BASE/rooms" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{"name":"战斗结算改版","description":"<共同目标与范围>"}' | jq '{id, displayKey}'
 
 # 里程碑：title + targetOn 必填；不传 status（由关联需求进度自动派生）
 curl -sS -X POST "$WORKFLOW_API_BASE/schedule/milestones" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{"title":"结算改版集成","kind":"integration","targetOn":"2026-09-30","reason":"按用户指令创建"}' | jq '{id, displayKey}'
 
 # 把需求归属到里程碑（需求侧单选，归属新的自动解除旧的；reason 必填）
@@ -147,7 +149,7 @@ curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
 curl -sS -X POST "$WORKFLOW_API_BASE/comments" \
   -H "Authorization: Bearer $WORKFLOW_TOKEN" \
   -H "content-type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data '{"targetType":"bug","targetId":"<uuid>","body":"复现步骤补充：冷启动必现"}'
 ```
 
@@ -208,7 +210,21 @@ for wave in topologicalWaves(manifest.operations):
 ## 读回验证
 
 ```bash
+# 逐对象（必要，不够）
 curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" "$WORKFLOW_API_BASE/work-items/<uuid>"
+
+# 批量结束后全量数量对账：view=summary，翻到 nextCursor 为空。
+# 本批每个标题恰好 1 条且条数 == 预期。只 GET 自称 UUID 不算过 G3。
+CURSOR=""
+while :; do
+  RESP=$(curl -sS -H "Authorization: Bearer $WORKFLOW_TOKEN" \
+    --get --data-urlencode "roomId=<room-uuid>" --data-urlencode "view=summary" \
+    --data-urlencode "limit=250" ${CURSOR:+--data-urlencode "cursor=$CURSOR"} \
+    "$WORKFLOW_API_BASE/requirements")
+  echo "$RESP" | python3 -c 'import sys,json;[print(i["displayKey"],i["title"]) for i in json.load(sys.stdin)["items"]]'
+  CURSOR=$(echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["nextCursor"])')
+  [ -z "$CURSOR" ] && break
+done
 ```
 
-每个写操作之后都读回一次，拿 `displayKey` + UUID + 标题进交付报告。
+每个写操作之后都读回一次，拿 `displayKey` + UUID + 标题进交付报告；整批还必须做全量数量对账。只核自称创建的那张不算过闸。

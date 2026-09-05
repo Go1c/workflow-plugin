@@ -14,7 +14,7 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 | :-: | --- | --- |
 | **G1** | `project.subdomainPrefix`、实际 API Host、`.workflow` 所选 profile 的子域三者任一不一致；或 `publicDemo=true`；或 `.workflow` 存在却解析不出 profile | **停止**，转 workflow-setup 重新绑定。绝不把数据写进错误项目 |
 | **G2** | 用户尚未针对**确切的项目 + 对象清单 + 数量**给出明确肯定答复，且当前模式没有有效的用户级 `full` standing authorization | **不得** POST/PATCH。内容认可、说"不错"、说"继续"都不是写入授权；`full` 也只覆盖已校验的 manifest；范围一变授权即失效 |
-| **G3** | 写操作之后没有 `GET` 读回，或读回未核对字段与子资源数量 | **不得**声称「已创建 / 已修改」。部分成功如实报部分成功 |
+| **G3** | 写操作之后没有 `GET` 读回，或读回未核对字段与子资源数量；批量建单后未翻页对账本批标题各恰好 1 条且条数 == 预期；只核自称创建的那张不算过闸 | **不得**声称「已创建 / 已修改」。部分成功如实报部分成功 |
 | **G4** | 需要在命令、日志、报告、蓝图里出现 token | **只**走环境变量携带；任何输出里只以 `wfp_` + 前 8 位指代，绝不回显完整值 |
 | **G5** | 出现拆 WorkItem、流转状态、建分支/Worktree、跑目标仓库测试、改代码或资产的冲动 | **停止**。落单不等于开工，本插件只负责 PM 对象 |
 | **G6** | 需要填工作流状态、验收类型/状态、成员 ID、缺陷自定义字段等**项目自定义**的值 | **必须现查**。查不到或不唯一就留空并告诉用户，绝不猜一个值填进去 |
@@ -48,7 +48,7 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
 
 批量落卡、建单、归属里程碑时按这六条做，不要另发明合同：
 
-1. 建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）。网络错误或响应不完整直接同键同体重发：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。
+1. 建单类 POST 一律带落盘的 `Idempotency-Key`（UUID v5，name = `bundleId + ":" + opId`，发出前写入 manifest）。写操作默认不重试；响应读取失败按「请求可能已送达」对账，有键才同键同体重放：`201` = 新建，`200` = 重放，都算成功；同键改内容会 `409`。禁止在发送时生成新键。
 2. 建单响应只取 `id` / `displayKey`（`jq`），不依赖回显的 `description`。
 3. 找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`，命中即真值；看室内清单用 `GET /requirements?roomId=&view=summary`。
 4. 预检看 `membership.moduleAccess`：建需求要 `requirements ≥ edit`，归属里程碑要 `milestones ≥ manage`；不看 `permissions`。
@@ -75,11 +75,11 @@ description: 在 Workflow（workflow.games）项目里执行字段与内容已�
   `bindRequirementReference`（无向 `references`）；上传后用 `getRequirementGraph` 读回。图谱
   的 `source/target` 不代表方向，依赖方向仍由本地 upstream/downstream 模型维护。
 
-读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接。`deepLink` 是相对路径，拼 `https://<子域>.workflow.games<deepLink>`（优先用读回响应或搜索结果里的 deepLink）。
+读回后（G3）向用户报：`displayKey` + UUID + 标题 + 可点链接。批量还必须附全量数量对账（本批标题各恰好 1 条）；只核自称创建的那张不算过闸。`deepLink` 是相对路径，拼 `https://<子域>.workflow.games<deepLink>`（优先用读回响应或搜索结果里的 deepLink）。
 
 ## 失败处置
 
-按 [connection.md](references/connection.md) 的失败处置表执行（422 / 401 / 403 / 409 / 423 / 429 / 5xx）。最容易出事的一条：**建单类 POST 必须带 `Idempotency-Key`；网络错误或 5xx 之后同键同体重发**（`201`/`200` 都算成功）——这是重复建单的头号来源，不要靠翻全量列表证明未落库。
+按 [connection.md](references/connection.md) 的失败处置表执行。最容易出事的一条：**响应读取失败 / 连接中断（请求可能已送达）不得自动重发**——这是重复建单的头号来源。写操作默认不重试；create 必须先把稳定 `idempotencyKey` 写入 manifest，只有同键同体才允许对账重放。
 
 ## 收尾
 
