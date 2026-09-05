@@ -275,6 +275,18 @@ describe("共享纪律：Agent 写路径", () => {
     assert.match(opsSkill, /204/);
     assert.match(opsSkill, /deepLink.*相对路径|相对路径.*deepLink/);
   });
+
+  test("幂等键先落盘，响应读取失败不得当发送失败重发", () => {
+    const connection = read("skills/workflow-ops/references/connection.md");
+    const draft = read("skills/workflow-ops/references/draft-format.md");
+    const gates = read("skills/workflow-ops/references/gates.md");
+    assert.match(draft, /idempotencyKey/);
+    assert.match(connection, /响应读取失败 \/ 连接中断/);
+    assert.match(connection, /写操作默认不重试/);
+    assert.match(gates, /本批标题各恰好 1 条且条数 == 预期/);
+    assert.match(gates, /只核自称创建的那张不算过闸/);
+    assert.doesNotMatch(callTemplates, /Idempotency-Key: \$\(uuidgen\)/);
+  });
 });
 
 describe("共享纪律：编排元数据与 Room 盘点（orchestration.md）", () => {

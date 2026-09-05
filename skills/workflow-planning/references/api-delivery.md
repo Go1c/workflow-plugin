@@ -26,7 +26,7 @@
 ## 只读预检与写入闸门
 
 1. 解析 profile 后调用 `/me` 核对用户身份，再调用 `/projects/current` 核对项目 UUID/名称、`project.subdomainPrefix`、`publicDemo` 与 **`membership.moduleAccess`**。预检可写性看 `moduleAccess`，不看 `permissions`：建需求要 `requirements ≥ edit`，归属里程碑要 `milestones ≥ manage`。PAT 的 `moduleAccess` 已与 token scope 求交，`read_only` 六模块全是 `read`。不得用探测性写入验证。多 profile 且当前目录未绑定时，暂停候选落单并转 `workflow-setup`；写入 `.workflow` 需要它自己的明确授权，不属于蓝图写入授权。绑定完成后从头重跑预检，绝不静默使用默认项目。
-2. 为蓝图生成并固定一个不含敏感信息的 `blueprintId` 和修订号。Room 与 Requirement 描述都保留可搜索标记 `workflow-plan: <blueprintId>/rN/<临时编号>`，用于审计和幂等恢复。建单类 POST 一律带 `Idempotency-Key`（UUID，一个业务动作一个键）；网络错误或响应不完整直接同键同体重发，`201`/`200` 都算成功。建单响应只取 `id` / `displayKey`，不依赖回显的 `description`。
+2. 为蓝图生成并固定一个不含敏感信息的 `blueprintId` 和修订号。Room 与 Requirement 描述都保留可搜索标记 `workflow-plan: <blueprintId>/rN/<临时编号>`，用于审计和幂等恢复。建单类 POST 一律带落盘的 `Idempotency-Key`（UUID v5，name = `bundleId + ":" + opId`，发出前写入 manifest）；响应读取失败按「请求可能已送达」对账，有键才同键同体重放，`201`/`200` 都算成功。建单响应只取 `id` / `displayKey`，不依赖回显的 `description`。
 3. 查重口径见 [workflow-ops 的 search.md](../../workflow-ops/references/search.md)：找已存在的卡用 `GET /search?q=<标记>&roomId=<室>`（`scope=body` 可搜描述里的蓝图标记），**命中即真值**。看室内清单用 `GET /requirements?roomId=&view=summary`。不要为了证明「不存在」去翻带完整 `description` 的全量列表。逐个 GET 核对拟复用对象的 Room 归属、内容和 `updatedAt`；疑似重复由用户决定复用、补写、更新还是另建，Agent 不自行覆盖。需要编排元数据（批次/轨道/依赖）时按 [orchestration.md](../../workflow-ops/references/orchestration.md) 的口径编码，不发明字段。
 4. `GET /projects/{projectId}/acceptance/types`（`projectId` 取自 `/projects/current`），选择与蓝图语义匹配的 active 类型及 `systemSemantic=not_started` 的 active 初始状态；创建验收项时 `statusId` 必填，`acceptanceTypeId` 随之确定。存在多个会改变报表口径的候选时，在写入确认前让用户决定，不按名称猜。
 5. **字段长度按字符（rune）算，中文一个字算一个**：Room `name` ≤ 80、`description` ≤ 2000、`module` ≤ 80，超限 422。生成 Room 名和描述时先自检长度——描述要同时装共同目标、蓝图标记、交付轨道和后续 PATCH 追加的 displayKey 与链接，2000 字符要留出余量，装不下的内容放 `[原始需求]` 正文而不是硬塞进 Room 描述。
@@ -68,8 +68,8 @@
 - `auto` 在上传前只确认一次确切 bundle；`full` 在 ready 后自动上传，但 G1/G3/G4/G6/G7、环检测、
   项目一致性、权限错误和写后读回不能绕过。并发度、已验证数量和失败数量必须记录在 checkpoint。
 
-- 每个写请求的检查点是“对象已 GET 读回，且子资源数量/内容已核对”。Requirement 已创建但验收项或附件缺失属于部分成功，只补缺失子资源，不重建 Requirement。
-- 网络错误、超时或 5xx 后，先用已知 UUID。没有 UUID 时：**同键同体重发**（`Idempotency-Key`）；`201`/`200` 都算成功。还没有键时，先走 `/search`（精确标题 + `scope=body` 搜蓝图标记，**命中即确认已落库**）。不得以 search 未命中作为未落库的唯一依据；没带幂等键时用室内 `view=summary` 列表核对，不要翻带完整 `description` 的全量列表。
+- 每个写请求的检查点是“对象已 GET 读回，且子资源数量/内容已核对”。整批结束后还要做全量数量对账：相关列表翻页到空，本批标题各恰好 1 条且条数 == 预期。Requirement 已创建但验收项或附件缺失属于部分成功，只补缺失子资源，不重建 Requirement。
+- 网络错误、超时、响应读取失败或 5xx 后，先用已知 UUID。没有 UUID 时：有落盘键就**同键同体对账重放**（`Idempotency-Key`）；`201`/`200` 都算成功。还没有键时，先走 `/search`（精确标题 + `scope=body` 搜蓝图标记，**命中即确认已落库**），不得当发送失败自动重发，**只读对账并停下**，禁止补写新键后再发送。不得以 search 未命中作为未落库的唯一依据；没带幂等键时用室内 `view=summary` 列表核对，不要翻带完整 `description` 的全量列表。
 - 已读回成功的对象不得重建。从 DAG 中第一个缺失对象或缺失子资源继续；不得为了伪装原子性删除用户可见 PM 数据。
 - 409 先重新读取并报告并发变化；不得覆盖。422 按 ProblemDetails 修正一次，第二次仍失败就停止并报告 `traceId`。401/403、423、429 和网络/5xx 完整遵循 `workflow-ops` 失败表。
 - 重试前重新核对目标项目；上下文、profile 或 Host 变化立即停止。创建范围因恢复判断发生变化时，再向用户确认新增写操作。

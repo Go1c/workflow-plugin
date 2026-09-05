@@ -17,6 +17,12 @@ const draft = read("skills/workflow-ops/references/draft-format.md");
 const calls = read("skills/workflow-ops/references/call-templates.md");
 const delivery = read("skills/workflow-ops/references/delivery.md");
 const command = read("commands/upload.md");
+const connection = read("skills/workflow-ops/references/connection.md");
+const gates = read("skills/workflow-ops/references/gates.md");
+const cardSpec = read("skills/workflow-ops/references/card-spec.md");
+const ops = read("skills/workflow-ops/SKILL.md");
+const search = read("skills/workflow-ops/references/search.md");
+const apiDelivery = read("skills/workflow-planning/references/api-delivery.md");
 
 describe("Workflow bundle 上传合同", () => {
   test("默认有界并发，且可配置但不能无限扩张", () => {
@@ -93,5 +99,53 @@ describe("Workflow bundle 上传合同", () => {
     assert.match(draft, /incremental/);
     assert.match(draft, /audit/);
     assert.doesNotMatch(draft, /standardVersion/);
+  });
+});
+
+describe("建单幂等与对账（重复建单防线）", () => {
+  test("create 的幂等键必须先写入 manifest，禁止现场 uuidgen", () => {
+    assert.match(draft, /"idempotencyKey"/);
+    assert.match(draft, /UUID v5/);
+    assert.match(draft, /bundleId \+ ":" \+ opId/);
+    assert.match(draft, /发出前必须已经写入 manifest/);
+    assert.match(draft, /create 类 POST 缺 `idempotencyKey` 不得发出/);
+    assert.match(skill, /idempotencyKey/);
+    assert.doesNotMatch(calls, /Idempotency-Key: \$\(uuidgen\)/);
+    assert.doesNotMatch(cardSpec, /Idempotency-Key: \$\(uuidgen\)/);
+    assert.doesNotMatch(ops, /\$\(uuidgen\)/);
+    assert.match(calls, /禁止 `IDEMPOTENCY_KEY=\$\(uuidgen\)`/);
+  });
+
+  test("写操作默认不重试；只有落盘幂等键才允许同键重放", () => {
+    assert.match(connection, /写操作默认不重试/);
+    assert.match(connection, /只有携带落盘幂等键时才允许重试/);
+    assert.match(skill, /没有落盘幂等键不得重发/);
+  });
+
+  test("响应读取失败与发送失败分列，前者不得自动重发", () => {
+    assert.match(connection, /响应读取失败 \/ 连接中断/);
+    assert.match(connection, /请求可能已送达/);
+    assert.match(connection, /IncompleteRead/);
+    assert.match(connection, /不得自动重发/);
+    assert.match(connection, /不得把 POST 与 GET 包进同一套/);
+  });
+
+  test("G3 要求批量全量数量对账，不只核对自称创建的那张", () => {
+    assert.match(gates, /本批标题各恰好 1 条且条数 == 预期/);
+    assert.match(gates, /只核自称创建的那张不算过闸/);
+    assert.match(skill, /全量数量对账/);
+    assert.match(skill, /标题重复/);
+    assert.match(delivery, /全量数量对账/);
+    assert.match(calls, /只 GET 自称 UUID 不算过 G3/);
+    assert.match(ops, /只核自称创建的那张不算过闸/);
+  });
+
+  test("search / planning 恢复路径不得把「没读回响应」当成发送失败", () => {
+    assert.match(search, /响应读取失败/);
+    assert.match(apiDelivery, /响应读取失败/);
+    assert.match(ops, /响应读取失败/);
+    assert.doesNotMatch(search, /补写键之后发送/);
+    assert.match(search, /只读对账并停下/);
+    assert.match(search, /禁止补写新键后再发送/);
   });
 });

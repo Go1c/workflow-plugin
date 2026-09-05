@@ -39,7 +39,17 @@
     "failurePolicy": "continue-independent"
   },
   "nodes": [],
-  "operations": [],
+  "operations": [
+    {
+      "opId": "create-req-i9",
+      "kind": "createRequirement",
+      "localId": "I-9",
+      "dependsOn": [],
+      "idempotencyKey": "5755de63-9c1a-5336-94cb-b7a007a66a4d",
+      "requestDigest": "sha256:…",
+      "status": "pending"
+    }
+  ],
   "edges": [],
   "dedupe": { "phase": "pending", "queries": [], "matches": [] },
   "remoteMap": {},
@@ -50,8 +60,14 @@
 节点使用稳定的 `localId`；planning bundle 中的每个可上传节点必须显式记录
 `readiness=conditional | ready | blocked`、`contractRefs` 和实际拥有范围。非 planning 的
 ops/execute 写回节点可以省略 `readiness`，按操作自身状态和依赖调度。操作使用确定性的 `opId`，并记录 `kind`、目标 localId、前置
-操作、请求摘要、状态、远端 UUID/displayKey 和 `requestDigest`。操作状态为
+操作、请求摘要、状态、远端 UUID/displayKey、`requestDigest` 和 `idempotencyKey`。操作状态为
 `pending | in_flight | succeeded | verified | failed | blocked`。
+
+建单类 POST（`createRequirement` / `createWorkItem` / `createRoom` / `createComment` /
+`createAttachment` / `createAcceptanceItem` / `createMilestone` / `createRelation`）的
+`idempotencyKey` **发出前必须已经写入 manifest** 并落盘，断点续传复用同一个值。键用 RFC 4122
+UUID v5：namespace = `uuid.NAMESPACE_URL`，name = `bundleId + ":" + opId`（用 `opId` 而不是只拿
+`localId`——一张卡可以有多条 create 类 POST）。禁止在发送时现场 `$(uuidgen)`：重试会换新键，等于关掉服务端幂等。create 类 POST 缺 `idempotencyKey` 不得发出；上传器对缺字段的 create 直接标 `blocked`，不发请求。
 
 边使用 [dependency-model.md](../../workflow-dependencies/references/dependency-model.md) 的结构，
 并保存 `basis=interface | implementation`。manifest 只保存直接边；完整传递链由分析结果
@@ -106,6 +122,6 @@ manifest、评论和 reason 中不得出现 token、Cookie 或密码。外部正
 表示某个操作失败时继续执行没有依赖它的操作，而所有下游操作保持 `blocked`。
 
 并发只改变独立操作的调度，不改变 DAG 语义：同一资源的更新、附件和评论拥有资源锁；关系
-写入要等两端节点都 `verified`。每个操作独立记录 `in_flight`、重试次数、幂等键、读回结果和
+写入要等两端节点都 `verified`。每个操作独立记录 `in_flight`、重试次数、落盘的 `idempotencyKey`、读回结果和
 错误 `traceId`，checkpoint 更新必须可恢复且不能把 `in_flight` 留作已完成。调度器不得为了
-提高吞吐量跳过全局查重、项目一致性、环检测或写后读回。
+提高吞吐量跳过全局查重、项目一致性、环检测、写后读回或批量全量数量对账。
