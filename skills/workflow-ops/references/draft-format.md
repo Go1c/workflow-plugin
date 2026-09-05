@@ -46,8 +46,7 @@
       "localId": "I-9",
       "dependsOn": [],
       "idempotencyKey": "5755de63-9c1a-5336-94cb-b7a007a66a4d",
-      "requestDigest": "sha256:…",
-      "status": "pending"
+      "requestDigest": "sha256:…"
     }
   ],
   "edges": [],
